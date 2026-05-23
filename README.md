@@ -43,8 +43,6 @@ Biology's knowledge is fragmented across labs, institutions, modalities, and tim
 
 ## Architecture
 
-JARVIS is built on [WorkerBee](./workerbee/README.md), a multi-agent orchestration framework inspired by the collective intelligence of honeybee colonies. WorkerBee coordinates specialized agents across the three capability layers, managing state, provenance, and task execution at scale.
-
 The inference-oriented data layer that enables hypothesis exploration at scale is described in detail in [Enabling Reason at Scale](./Enabling_reason_at_scale.md). Its core components are:
 
 | Component | Purpose |
