@@ -37,7 +37,7 @@ A hypothesis is only valuable if it can be tested. JARVIS connects hypothesis ge
 ### 3. Connect
 *Increase the rate of information flow across biological silos.*
 
-Biology's knowledge is fragmented across labs, institutions, modalities, and time. JARVIS acts as a connective tissue — surfacing relevant work from adjacent fields, linking findings across experimental contexts, and ensuring that evidence generated in one corner of biology becomes available to investigators working in another.
+Biology's knowledge is fragmented across labs, institutions, modalities, and time. JARVIS acts as connective tissue — surfacing relevant work from adjacent fields, linking findings across experimental contexts, and ensuring that evidence generated in one corner of biology becomes available to investigators working in another.  For example, a program team might be working on creating a therapeutic which upregulates expression of a gene because downregulation is thought to create disease state.  In a different part of the org, a human genetics scientist might find that downregulation does __not__ lead to disease state. How can we rapidly share this finding with the program team?  this requires real time contextual monitoring, understanding, and notification.
 
 ---
 
@@ -61,8 +61,8 @@ The inference-oriented data layer that enables hypothesis exploration at scale i
 This project is under active development. Current work includes:
 
 - **Inference-oriented architecture prototype** — instantiating the components described in [Enabling Reason at Scale](./Enabling_reason_at_scale.md) against a canonical human genetics workflow (GWAS → colocalization → cell type expression → hypothesis)
-- **WorkerBee orchestration layer** — multi-agent state machine coordinating hypothesis exploration workflows
 - **Closed-loop experimentation** — autonomous experimental cycles with Opentrons robotics and Bayesian optimization, active in partnership with Monomer Bio and JBEI
+- **Surveillance architecture** — contextual notification system that monitors evidence sources for changes relevant to active hypotheses. Where the inference layer answers questions you knew to ask, surveillance answers questions you didn't know to ask yet — watching public repositories, preprint servers, and data releases and routing signal to investigators based on the context of their current work, not just keyword matches
 
 ---
 
