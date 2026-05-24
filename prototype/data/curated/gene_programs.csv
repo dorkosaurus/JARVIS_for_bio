@@ -1,0 +1,7 @@
+program_id,program_label,cell_type_label,cell_type_ontology,atlas_dataset,method,coherence,source_dataset,citation
+RETINA_RPE_NMF_COMPLEMENT,Complement regulation in RPE,retinal pigment epithelial cell,CL:0002586,Voigt_2019_choroidRPE_atlas,cNMF,0.86,curated_v0_literature,"Voigt AP et al. 2019 Exp Eye Res 184:234 (PMID:30980815); Orozco LD et al. 2020 Cell Rep 30:1246 (PMID:32023443)"
+RETINA_RPE_NMF_ECM,Extracellular matrix and Bruch's membrane in RPE,retinal pigment epithelial cell,CL:0002586,Voigt_2019_choroidRPE_atlas,cNMF,0.79,curated_v0_literature,"Voigt AP et al. 2019 Exp Eye Res 184:234; Lukowski SW et al. 2019 EMBO J 38:e100811"
+RETINA_RPE_NMF_PHAGOCYTOSIS,Photoreceptor outer segment phagocytosis,retinal pigment epithelial cell,CL:0002586,Voigt_2019_choroidRPE_atlas,cNMF,0.81,curated_v0_literature,"Voigt AP et al. 2019 Exp Eye Res 184:234"
+CHOROID_ENDOTH_NMF_COMPLEMENT,Complement and immune activation in choroid endothelium,choroidal endothelial cell,CL:0002145,Voigt_2019_choroidRPE_atlas,cNMF,0.74,curated_v0_literature,"Voigt AP et al. 2019 Exp Eye Res 184:234"
+CHOROID_ENDOTH_NMF_VASCULAR,Choroidal endothelial vascular program,choroidal endothelial cell,CL:0002145,Voigt_2019_choroidRPE_atlas,cNMF,0.83,curated_v0_literature,"Voigt AP et al. 2019 Exp Eye Res 184:234"
+RETINA_RPE_NMF_LIPID,Cholesterol/lipid handling in RPE,retinal pigment epithelial cell,CL:0002586,Orozco_2020_AMD_atlas,cNMF,0.72,curated_v0_literature,"Orozco LD et al. 2020 Cell Rep 30:1246; Storti F et al. 2019 eLife 8:e45100"

@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+prototype/indices/*.sqlite
+.env
+.DS_Store
+claude

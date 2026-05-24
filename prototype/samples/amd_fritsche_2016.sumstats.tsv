@@ -1,0 +1,24 @@
+## GWAS summary statistics -- top genome-wide significant loci
+## study_id: GCST003219
+## trait: Advanced age-related macular degeneration
+## citation: Fritsche LG et al. 2016 Nat Genet 48:134-143 (PMID:26691988)
+## cohort: 16144 cases / 17832 controls; European ancestry
+## genome_build: GRCh38
+## url_full_sumstats: https://www.ebi.ac.uk/gwas/studies/GCST003219
+## note: This file is a top-loci preview (the published meta-analysis covers
+##   ~10M variants). Effect sizes and p-values are rounded approximations of
+##   the published values, suitable for demonstration. Full fine-mapping and
+##   colocalization results are pre-computed in the jarvis-indices server
+##   (keyed on study_id above); when asked to analyze "this GWAS", use the
+##   study_id to query those indices rather than re-running fine-mapping.
+SNP	CHR	BP	A1	A2	EAF	BETA	SE	P	N	LOCUS
+rs10922109	1	196735502	C	A	0.45	0.88	0.02	2.0e-434	33976	CFH
+rs3750846	10	122456049	T	C	0.21	0.99	0.02	5.0e-260	33976	ARMS2/HTRA1
+rs2230199	19	6718376	G	C	0.20	0.34	0.02	5.7e-58	33976	C3
+rs10033900	4	109737911	T	C	0.49	0.16	0.02	2.5e-45	33976	CFI
+rs140647181	3	99461824	T	C	0.05	0.45	0.04	2.5e-31	33976	COL8A1
+rs13278062	8	23225458	G	T	0.50	0.13	0.02	1.5e-30	33976	TNFRSF10A
+rs429358	19	44908684	T	C	0.15	-0.36	0.05	4.0e-13	33976	APOE
+rs3138141	12	55721994	C	A	0.21	0.15	0.02	2.5e-12	33976	RDH5
+rs2740488	9	104899461	A	C	0.74	-0.13	0.02	8.0e-12	33976	ABCA1
+rs5754227	22	32709831	T	C	0.49	0.10	0.02	1.2e-11	33976	SYN3

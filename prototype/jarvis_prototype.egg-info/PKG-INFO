@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: jarvis-prototype
+Version: 0.1.0
+Summary: AMD hypothesis-generation prototype: pre-computed indices + MCP servers + Claude Code
+Requires-Python: >=3.11
+Requires-Dist: mcp>=1.2.0
+Requires-Dist: requests>=2.31.0
