@@ -2,7 +2,8 @@
 
 Inference-oriented prototype: Claude Code orchestrates analyses by calling
 MCP-exposed indices and following pre-registered analytic workflows.
-Design doc: `Hypothesis_Generation.md`.
+Design doc: `Missing_Infra_AIxDrug_Disc.md`. Implementation notes:
+`missing_infra_prototype/README.md`.
 
 ## MCP servers (auto-loaded via .mcp.json)
 
@@ -16,7 +17,7 @@ Design doc: `Hypothesis_Generation.md`.
 
 ## Sample GWAS datasets
 
-`prototype/samples/*.sumstats.tsv` are GWAS summary statistics files
+`missing_infra_prototype/samples/*.sumstats.tsv` are GWAS summary statistics files
 (top-loci preview format, GWAS Catalog harmonized style). Each file has
 `##` comment headers at the top — the line `## study_id: <id>` is the
 key that maps to a study already indexed in `credible_sets`. When the
