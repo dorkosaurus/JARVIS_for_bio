@@ -1,0 +1,412 @@
+"""Generate the v0 per-target mechanistic hypothesis reports for AMD.
+
+Reads pre-computed evidence from prototype/cache/amd_targets.json (produced by
+the ESM3 batch run) and joins it with mock DE / pathway from jarvis-indices and
+literature from jarvis-paperclip. Writes one markdown report per top L2G gene
+to v0_release/output/<symbol>_<ensg>.md plus an INDEX.md.
+
+Intended to be run *once* to pre-populate the substack-linked report files.
+The agent-driven demo follows the same workflow at runtime via MCP.
+"""
+from __future__ import annotations
+
+import json
+import shutil
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Optional
+
+REPO = Path("/home/ubuntu/JARVIS_for_bio")
+sys.path.insert(0, str(REPO))
+
+from prototype.mcp_servers import ot_server as ot
+from prototype.mcp_servers import paperclip_server as pc
+
+EVIDENCE_JSON = REPO / "prototype" / "cache" / "amd_targets.json"
+OUTPUT_DIR = REPO / "v0_release" / "output"
+PNG_DIR = OUTPUT_DIR / "renders"
+INDICES_DB = REPO / "prototype" / "indices" / "jarvis.sqlite"
+
+STUDY_ID = "GCST003219"
+
+
+def query_de(symbol: str) -> list[dict[str, Any]]:
+    c = sqlite3.connect(INDICES_DB)
+    c.row_factory = sqlite3.Row
+    rows = c.execute(
+        "SELECT cell_type_label, cell_type_ontology, comparison, log2fc, padj, "
+        "       method, atlas_dataset, n_case, n_control, source_dataset "
+        "FROM differential_expression WHERE gene_symbol = ? "
+        "ORDER BY padj ASC",
+        [symbol],
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+HYPOTHESIS_SYSTEM_PROMPT = """You are composing the reasoning step of an agent workflow that generates per-target mechanistic hypotheses for age-related macular degeneration (AMD) from a GWAS.
+
+Given a structured evidence pack for a single gene, write a focused 4-6 sentence mechanistic hypothesis that integrates:
+  - the lead variant + its predicted consequence (coding/non-coding, residue change if any, structural fold metrics)
+  - the L2G top SHAP-contributing features (which evidence drove the gene call)
+  - differential expression rows (cell type + log2FC + padj, if present)
+  - Reactome pathway membership (cite specific pathway names)
+  - top PaperClip papers (cite specific paper IDs)
+
+Constraints:
+  - Be precise. Cite specific numerical values (log2FC, padj, scores, PIP) from the evidence verbatim.
+  - Do NOT invent biology not supported by the evidence pack. If a layer is sparse (e.g. no DE rows), acknowledge it honestly.
+  - Propose a coherent chain: variant -> protein or regulatory effect -> cell type effect -> pathway disruption -> AMD phenotype.
+  - If the variant is non-coding, frame the protein effect as "regulatory" rather than fabricating a structural change.
+  - If the gene has paradoxical AMD biology (e.g. APOE epsilon4 is risk-protective in AMD but risk-increasing in AD), say so.
+  - Output ONLY the hypothesis paragraph. No headings, no preamble, no markdown formatting beyond inline italics for gene names if you wish.
+"""
+
+
+def compose_hypothesis(symbol: str, evidence: dict[str, Any], timeout_s: int = 90) -> str:
+    """Run `claude -p` with the evidence pack to compose a mechanistic hypothesis.
+
+    Returns the hypothesis paragraph as plain markdown text (no headers).
+    Falls back to a TODO placeholder if the call fails or times out.
+    """
+    evidence_json = json.dumps(evidence, indent=2, default=str)
+    user_prompt = (
+        f"Gene: {symbol}\n\n"
+        f"Evidence pack (JSON):\n```json\n{evidence_json}\n```\n\n"
+        "Compose the mechanistic hypothesis paragraph now."
+    )
+    try:
+        result = subprocess.run(
+            ["claude", "-p", "--append-system-prompt", HYPOTHESIS_SYSTEM_PROMPT],
+            input=user_prompt,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        return f"_(hypothesis composition timed out after {timeout_s}s — TODO regenerate)_"
+    if result.returncode != 0:
+        return f"_(hypothesis composition failed: {result.stderr[-200:].strip()} — TODO regenerate)_"
+    hyp = result.stdout.strip()
+    if not hyp:
+        return "_(empty hypothesis returned — TODO regenerate)_"
+    return hyp
+
+
+def query_pathways(symbol: str, max_members: int = 200) -> list[dict[str, Any]]:
+    c = sqlite3.connect(INDICES_DB)
+    c.row_factory = sqlite3.Row
+    rows = c.execute(
+        "SELECT pathway_id, pathway_name, pathway_db, n_members, source_dataset "
+        "FROM pathway_membership WHERE gene_symbol = ? AND n_members <= ? "
+        "ORDER BY n_members ASC LIMIT 8",
+        [symbol, max_members],
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def fmt_pip(p) -> str:
+    return f"{p:.3f}" if p is not None else "n/a"
+
+
+def write_report(symbol: str, ensg: str, ev: dict[str, Any]) -> Path:
+    fold = ev.get("fold") or {}
+    vc = ev.get("consequence") or {}
+    render = ev.get("render") or {}
+    uniprot = ev.get("uniprot")
+    lead_var = ev.get("lead_variant")
+    studyLocusId = ev.get("studyLocusId")
+
+    # Fetch L2G feature contributions
+    feats = ot.l2g_feature_contributions(studyLocusId, gene_id=ensg)
+    top_feats = (feats.get("top_contributing_features") or [])[:5]
+
+    # Literature
+    lit = pc.literature_for_gene(symbol, disease_context="age-related macular degeneration", n=5)
+    papers = lit.get("papers", [])
+
+    # DE + pathway (mock)
+    de_rows = query_de(symbol)
+    pw_rows = query_pathways(symbol)
+
+    # Copy PNG into the report-local renders/ dir so links work in substack
+    PNG_DIR.mkdir(parents=True, exist_ok=True)
+    png_src = render.get("png_path")
+    png_rel = None
+    if png_src and Path(png_src).exists():
+        suffix = Path(png_src).suffix
+        png_name = f"{symbol}_{uniprot}{suffix}"
+        png_dst = PNG_DIR / png_name
+        shutil.copy(png_src, png_dst)
+        png_rel = f"renders/{png_name}"
+
+    # Compose markdown
+    lines: list[str] = []
+    lines.append(f"# {symbol} — mechanistic hypothesis for AMD")
+    lines.append("")
+    lines.append(f"_Study: {STUDY_ID} (Fritsche LG et al. 2016, Nat Genet 48:134–143)_")
+    lines.append("")
+    lines.append("## Summary")
+    lines.append("")
+    csq = vc.get("most_severe_consequence") if vc and vc.get("found") else "n/a"
+    aa_change = ""
+    if vc and vc.get("found") and vc.get("amino_acids"):
+        if "/" in (vc.get("amino_acids") or "") and vc.get("protein_start"):
+            ref_aa, alt_aa = vc["amino_acids"].split("/")
+            aa_change = f" {ref_aa}{vc['protein_start']}{alt_aa}"
+    lines.append(
+        f"- **Lead variant:** `{lead_var}` ({csq}{aa_change})"
+    )
+    lines.append(f"- **L2G score:** {ev.get('l2g_score','—')}  ·  **studyLocusId:** `{studyLocusId}`")
+    lines.append(f"- **UniProt:** {uniprot}  ·  **ENSG:** {ensg}")
+    if fold:
+        lines.append(
+            f"- **ESM3 fold:** mean pLDDT = {fold.get('mean_plddt',0):.2f}, pTM = {fold.get('ptm',0):.2f}, length = {fold.get('length')} aa"
+        )
+    lines.append("")
+
+    # Variant viz
+    if png_rel:
+        if vc and vc.get("protein_start"):
+            title = f"ESM3 fold with variant {aa_change.strip()} highlighted"
+        else:
+            title = "ESM3-predicted structure (variant is non-coding; full protein shown)"
+        lines.append(f"![{symbol} variant view]({png_rel})")
+        lines.append("")
+        lines.append(f"_{title}._  Source: PyMOL open-source headless render over ESM3 PDB.")
+        lines.append("")
+
+    # Variant detail
+    lines.append("## Variant consequence")
+    lines.append("")
+    if vc and vc.get("found"):
+        lines.append(f"- **Consequence:** {csq}")
+        lines.append(f"- **Impact:** {vc.get('impact','n/a')}")
+        if vc.get("protein_start"):
+            lines.append(f"- **Protein change:** {aa_change.strip()} (residue {vc['protein_start']})")
+        if vc.get("polyphen_prediction"):
+            lines.append(f"- **PolyPhen:** {vc['polyphen_prediction']} ({vc.get('polyphen_score')})")
+        if vc.get("sift_prediction"):
+            lines.append(f"- **SIFT:** {vc['sift_prediction']} ({vc.get('sift_score')})")
+        lines.append("")
+        lines.append(f"_Provenance: {vc.get('provenance','Ensembl VEP REST')}_")
+    else:
+        lines.append("_VEP lookup returned no consequence._")
+    lines.append("")
+
+    # L2G evidence
+    lines.append("## L2G evidence (Open Targets)")
+    lines.append("")
+    if top_feats:
+        lines.append("Top SHAP contributing features (out of 29):")
+        lines.append("")
+        lines.append("| Feature | Value | SHAP contribution |")
+        lines.append("|---|---:|---:|")
+        for f in top_feats:
+            v = f.get("value")
+            s = f.get("shap")
+            vstr = f"{v:.2f}" if isinstance(v, float) else str(v)
+            sstr = f"{s:+.3f}" if isinstance(s, float) else str(s)
+            lines.append(f"| `{f['name']}` | {vstr} | {sstr} |")
+        lines.append("")
+    lines.append(f"_Provenance: {feats.get('provenance','OT L2G')}_")
+    lines.append("")
+
+    # ESM3 fold details
+    lines.append("## ESM3-predicted structure")
+    lines.append("")
+    if fold:
+        lines.append(f"- Mean pLDDT (model confidence, 0–1): **{fold.get('mean_plddt',0):.2f}**")
+        lines.append(f"- pTM (global fold confidence, 0–1): **{fold.get('ptm',0):.2f}**")
+        lines.append(f"- Sequence length: {fold.get('length')} aa")
+        lines.append("")
+        lines.append(f"_Provenance: ESM3 Forge (esm3-open-2024-03), cached at `{fold.get('pdb_path')}`_")
+    lines.append("")
+
+    # Differential expression
+    lines.append("## Differential expression in AMD (case vs control)")
+    lines.append("")
+    if de_rows:
+        lines.append("| Cell type | log2FC | padj | n cases / controls | method |")
+        lines.append("|---|---:|---:|---:|---|")
+        for r in de_rows:
+            lines.append(
+                f"| {r['cell_type_label']} (`{r['cell_type_ontology']}`) | "
+                f"{r['log2fc']:+.2f} | {r['padj']:.1e} | "
+                f"{r['n_case']} / {r['n_control']} | {r['method']} |"
+            )
+        lines.append("")
+        prov = de_rows[0].get("source_dataset", "jarvis-indices DE mock")
+        lines.append(f"_Provenance: {prov}  · v0 stub backed by curated AMD scRNA-seq atlas; real DE substrate in v1._")
+    else:
+        lines.append("_No DE rows for this gene in the v0 mock atlas (mock coverage focused on top complement/lipid loci)._")
+    lines.append("")
+
+    # Pathway membership
+    lines.append("## Pathway membership")
+    lines.append("")
+    if pw_rows:
+        lines.append("| Pathway | DB | Members |")
+        lines.append("|---|---|---:|")
+        for r in pw_rows:
+            lines.append(f"| {r['pathway_name']} (`{r['pathway_id']}`) | {r['pathway_db']} | {r['n_members']} |")
+        lines.append("")
+        lines.append(f"_Provenance: {pw_rows[0].get('source_dataset','Reactome via jarvis-indices')}._")
+    else:
+        lines.append("_No curated pathway memberships in v0 mock for this gene._")
+    lines.append("")
+
+    # Literature
+    lines.append("## Literature corroboration (PaperClip)")
+    lines.append("")
+    if papers:
+        for p in papers:
+            title = p.get("title") or "(no title)"
+            paper_id = p.get("paper_id") or "?"
+            src = p.get("source") or "?"
+            date = p.get("date") or ""
+            url = p.get("url") or ""
+            summary = (p.get("summary") or "").strip()
+            if url:
+                lines.append(f"- **[{title}]({url})** — {src}, {date} · `{paper_id}`")
+            else:
+                lines.append(f"- **{title}** — {src}, {date} · `{paper_id}`")
+            if summary:
+                lines.append(f"  > {summary}")
+        lines.append("")
+    lines.append(f"_Provenance: {lit.get('provenance','PaperClip')}_")
+    lines.append("")
+
+    # Mechanistic hypothesis (the agent-reasoning step)
+    lines.append("## Mechanistic hypothesis")
+    lines.append("")
+    hypothesis_evidence = {
+        "gene_symbol": symbol,
+        "uniprot": uniprot,
+        "ensg": ensg,
+        "l2g_score": ev.get("l2g_score"),
+        "lead_variant": lead_var,
+        "studyLocusId": studyLocusId,
+        "variant_consequence": {
+            k: vc.get(k) for k in (
+                "most_severe_consequence", "impact", "protein_start",
+                "amino_acids", "polyphen_prediction", "polyphen_score",
+                "sift_prediction", "sift_score",
+            )
+        } if vc and vc.get("found") else {"found": False},
+        "esm3_fold": {
+            "mean_plddt": fold.get("mean_plddt"),
+            "ptm": fold.get("ptm"),
+            "length": fold.get("length"),
+        },
+        "l2g_top_features": top_feats,
+        "differential_expression": [
+            {k: r.get(k) for k in ("cell_type_label","cell_type_ontology","log2fc","padj","method","source_dataset")}
+            for r in de_rows
+        ],
+        "pathway_membership": [
+            {k: r.get(k) for k in ("pathway_name","pathway_id","pathway_db","n_members")}
+            for r in pw_rows
+        ],
+        "literature": [
+            {k: p.get(k) for k in ("title","paper_id","source","date","url","summary")}
+            for p in papers
+        ],
+    }
+    print(f"    composing hypothesis for {symbol}…", flush=True)
+    hyp = compose_hypothesis(symbol, hypothesis_evidence)
+    lines.append(hyp)
+    lines.append("")
+    lines.append("_This paragraph is the agent-reasoning step (workflow step 9). Composed at build time by Claude (one-shot via `claude -p`) over the evidence pack assembled in steps 0–8. The only generative step; all other content above is direct tool output._")
+    lines.append("")
+
+    # Provenance chain
+    lines.append("## Full provenance chain")
+    lines.append("")
+    lines.append("Every claim above traces back to an MCP tool call:")
+    lines.append("")
+    lines.append("1. `jarvis-ot.study_lookup(GCST003219)` → Fritsche 2016 AMD GWAS")
+    lines.append("2. `jarvis-ot.credible_sets_for_study(GCST003219)` → 29 fine-mapped credible sets")
+    lines.append(f"3. `jarvis-ot.l2g_top_genes(GCST003219)` → {symbol} (L2G score, 29 features)")
+    lines.append(f"4. `jarvis-ot.gene_metadata({symbol})` → UniProt {uniprot}, canonical transcript")
+    lines.append(f"5. `jarvis-ot.lead_variant_for_locus({studyLocusId[:10]}...)` → `{lead_var}`")
+    lines.append(f"6. `jarvis-esm3.variant_consequence({lead_var})` → {csq}")
+    lines.append(f"7. `jarvis-esm3.fold_and_annotate({uniprot})` → ESM3 PDB (pLDDT={fold.get('mean_plddt',0):.2f}, pTM={fold.get('ptm',0):.2f})")
+    lines.append(f"8. `jarvis-esm3.render_variant_png({uniprot}, …)` → `{Path(png_src).name if png_src else 'no PNG'}`")
+    lines.append(f"9. `jarvis-indices.query_differential_expression(\"{symbol}\")` → {len(de_rows)} cell-type DE row(s) _(v0 mock)_")
+    lines.append(f"10. `jarvis-indices.query_pathway_membership(\"{symbol}\")` → {len(pw_rows)} pathway(s) _(v0 mock)_")
+    lines.append(f"11. `jarvis-paperclip.literature_for_gene(\"{symbol}\", …)` → {len(papers)} paper(s)")
+    lines.append("")
+    lines.append("Reasoning (this summary) is the *only* step that is not pre-computed.")
+    lines.append("")
+
+    out_path = OUTPUT_DIR / f"{symbol}_{ensg}.md"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(lines))
+    return out_path
+
+
+def write_index(rows: list[dict[str, Any]]) -> Path:
+    lines = [
+        "# AMD top targets — v0 hypothesis reports",
+        "",
+        f"GWAS: **{STUDY_ID}** (Fritsche LG et al. 2016, Nat Genet)  ",
+        f"Total credible sets: 29  ·  Top L2G genes: {len(rows)}  ·  Pipeline: Open Targets L2G → ESM3 fold + variant viz → PaperClip literature → v0 mock DE & pathway",
+        "",
+        "| Rank | Gene | L2G | UniProt | Lead variant | Consequence | Report |",
+        "|---:|---|---:|---|---|---|---|",
+    ]
+    for i, r in enumerate(rows, 1):
+        vc = r.get("consequence") or {}
+        csq = vc.get("most_severe_consequence") if vc.get("found") else "—"
+        aa = ""
+        if vc.get("amino_acids") and vc.get("protein_start"):
+            ref, alt = vc["amino_acids"].split("/")
+            aa = f" {ref}{vc['protein_start']}{alt}"
+        lines.append(
+            f"| {i} | **{r['symbol']}** | {r['l2g_score']:.3f} | {r['uniprot']} | "
+            f"`{r['lead_variant']}` | {csq}{aa} | [report]({r['symbol']}_{r['ensg']}.md) |"
+        )
+    lines.append("")
+    lines.append("Each report integrates Open Targets L2G features, ESM3 fold + variant render, mock differential expression and pathway membership (v0 stubs), and PaperClip literature corroboration — every claim traceable to an MCP tool call.")
+    lines.append("")
+    p = OUTPUT_DIR / "INDEX.md"
+    p.write_text("\n".join(lines))
+    return p
+
+
+def main() -> int:
+    ev_all = json.loads(EVIDENCE_JSON.read_text())
+
+    # Need to get ENSG + L2G score for each symbol — pull from OT
+    top = ot.l2g_top_genes(STUDY_ID, score_threshold=0.5, limit=30)["top_genes"]
+    by_symbol = {r["gene_symbol"]: r for r in top}
+
+    rows_for_index: list[dict[str, Any]] = []
+    for symbol, ev in ev_all.items():
+        l2g_row = by_symbol.get(symbol)
+        if not l2g_row:
+            print(f"  WARN: no L2G row for {symbol}, skipping")
+            continue
+        ensg = l2g_row["geneId"]
+        ev_with_l2g = {**ev, "l2g_score": l2g_row["l2g_score"]}
+        out_path = write_report(symbol, ensg, ev_with_l2g)
+        print(f"  wrote {out_path.relative_to(REPO)}")
+        rows_for_index.append({
+            "symbol": symbol,
+            "ensg": ensg,
+            "uniprot": ev["uniprot"],
+            "l2g_score": l2g_row["l2g_score"],
+            "lead_variant": ev["lead_variant"],
+            "consequence": ev.get("consequence"),
+        })
+
+    rows_for_index.sort(key=lambda x: x["l2g_score"], reverse=True)
+    idx = write_index(rows_for_index)
+    print(f"  wrote {idx.relative_to(REPO)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
