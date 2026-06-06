@@ -264,60 +264,90 @@ def render_variant_png(
     variant_label: Optional[str] = None,
     width: int = 900,
     height: int = 700,
+    zoom_buffer: float = 25.0,
 ) -> dict[str, Any]:
-    """Render the protein structure as a cartoon PNG.
+    """Render the protein structure as cartoon PNG(s).
 
-    If residue_number is provided, highlights that residue with sticks +
-    zooms in. If None, renders the full protein from a default orientation.
+    If residue_number is given, produces TWO PNGs:
+      - render_r<resi>_domain.png  — zoomed on the residue + zoom_buffer Å
+        of surrounding context (default 25 Å, i.e. whole local domain)
+      - render_r<resi>_protein.png — full protein with the variant residue
+        still marked (red sphere + label, sphere scale boosted so it's
+        visible at full zoom)
+    If residue_number is None, produces one render_all.png of the whole
+    protein (no variant marker).
 
-    Output: prototype/cache/esm3/<uniprot>/render_<resi>.png
+    Outputs: prototype/cache/esm3/<uniprot>/render_*.png
     """
     target_dir = CACHE / uniprot_id
     pdb_path = target_dir / "structure.pdb"
     if not pdb_path.exists():
         return {"error": f"no PDB at {pdb_path} — run fold_and_annotate first"}
-    suffix = f"r{residue_number}" if residue_number is not None else "all"
-    png_path = target_dir / f"render_{suffix}.png"
 
     import pymol
     pymol.finish_launching(["pymol", "-cq"])
     from pymol import cmd
 
-    cmd.reinitialize()
-    cmd.load(str(pdb_path), "prot")
-    cmd.bg_color("white")
-    cmd.hide("everything")
-    cmd.show("cartoon", "prot")
-    cmd.color("lightblue", "prot")
-    cmd.set("cartoon_transparency", 0.0)
-    cmd.set("ray_shadows", 0)
-    cmd.set("antialias", 2)
+    def _setup_scene(sphere_scale: float) -> None:
+        cmd.reinitialize()
+        cmd.load(str(pdb_path), "prot")
+        cmd.bg_color("white")
+        cmd.hide("everything")
+        cmd.show("cartoon", "prot")
+        cmd.color("lightblue", "prot")
+        cmd.set("cartoon_transparency", 0.0)
+        cmd.set("ray_shadows", 0)
+        cmd.set("antialias", 2)
+        if residue_number is not None:
+            cmd.select("variant", f"resi {residue_number}")
+            cmd.show("sticks", "variant")
+            cmd.show("spheres", "variant and name CA")
+            cmd.set("sphere_scale", sphere_scale, "variant and name CA")
+            cmd.color("red", "variant")
+            if variant_label:
+                cmd.label("variant and name CA", f"'{variant_label}'")
+                cmd.set("label_color", "black")
+                cmd.set("label_size", 18)
 
-    if residue_number is not None:
-        sel = f"resi {residue_number}"
-        cmd.select("variant", sel)
-        cmd.show("sticks", "variant")
-        cmd.show("spheres", "variant and name CA")
-        cmd.set("sphere_scale", 0.6, "variant and name CA")
-        cmd.color("red", "variant")
-        # Label
-        if variant_label:
-            cmd.label("variant and name CA", f"'{variant_label}'")
-            cmd.set("label_color", "black")
-            cmd.set("label_size", 18)
-        # Zoom on variant + 8Å context
-        cmd.zoom("variant", 10)
-        cmd.orient("variant")
-    else:
+    if residue_number is None:
+        png_path = target_dir / "render_all.png"
+        _setup_scene(sphere_scale=0.6)
         cmd.zoom("prot")
         cmd.orient("prot")
+        cmd.png(str(png_path), width=width, height=height, dpi=150, ray=1)
+        return {
+            "uniprot_id": uniprot_id,
+            "residue_number": None,
+            "variant_label": None,
+            "png_path": str(png_path),
+            "provenance": "PyMOL open-source 3.x headless render",
+        }
 
-    cmd.png(str(png_path), width=width, height=height, dpi=150, ray=1)
+    # Coding variant: two views
+    domain_path = target_dir / f"render_r{residue_number}_domain.png"
+    protein_path = target_dir / f"render_r{residue_number}_protein.png"
+
+    # Domain view: orient first to set rotation, then zoom with buffer so
+    # the orient call doesn't override the zoom-out.
+    _setup_scene(sphere_scale=0.6)
+    cmd.orient("variant")
+    cmd.zoom("variant", zoom_buffer)
+    cmd.png(str(domain_path), width=width, height=height, dpi=150, ray=1)
+
+    # Protein view: big sphere so the variant is visible at full zoom
+    _setup_scene(sphere_scale=2.0)
+    cmd.orient("prot")
+    cmd.zoom("prot")
+    cmd.png(str(protein_path), width=width, height=height, dpi=150, ray=1)
+
     return {
         "uniprot_id": uniprot_id,
         "residue_number": residue_number,
         "variant_label": variant_label,
-        "png_path": str(png_path),
+        "png_path": str(domain_path),  # back-compat
+        "png_path_domain": str(domain_path),
+        "png_path_protein": str(protein_path),
+        "zoom_buffer_angstroms": zoom_buffer,
         "provenance": "PyMOL open-source 3.x headless render",
     }
 
