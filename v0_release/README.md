@@ -1,28 +1,43 @@
-# Drug discovery has a reasoning problem
+# An inference-oriented architecture for agent-scale reasoning
 
-*An inference-oriented architecture for agent-driven hypothesis generation, with a v0 that runs end-to-end on MCP.*
+Some fields have more questions than humans can ever ask and answer.
 
----
+* In biology: gene × cell × variant × tissue × pathway.
+* In materials science: composition × structure × processing × property.
 
-Biology spent a decade getting big. The infrastructure we built during that time was designed for human scientists to query, interpret, and act on data. What's changed is the emergence of heterogeneous AI systems capable of reasoning over that data at a scale no human team can match. The infrastructure wasn't built for them, and it shows. Without in silico intelligence that can actually plug into biological data at scale, we can't explore hypothesis space fully, and most of it goes unexplored.
+Anywhere the question space is built from combinations of things, the hypotheses that *could* be formed scale combinatorially. As a result, most questions don't get asked or answered and most hypotheses don't get formed.
 
-The arithmetic is unforgiving. A serious AMD target-discovery effort might touch twenty GWAS loci. Each one needs fine-mapping, colocalization, differential expression, variant consequence annotation, pathway enrichment, and literature synthesis before you can say anything mechanistic about it. Most teams work three or four loci well and deprioritize the rest, not because the biology matters less, but because analyst time runs out. The hypotheses that don't get generated don't fail. They just never exist.
+What's changed is that AI agents can finally explore hypothesis space at the scale the combinatorics demand.
 
-AI agents can change that throughput. They don't deprioritize locus six because locus one was more compelling. They can run the same reasoning protocol across all twenty candidates in parallel.
+But agents are running on top of infrastructure designed for humans asking one question at a time: fine-mapping a GWAS locus, folding a protein, running pathway enrichment, mining the literature.
 
-What throughput alone doesn't resolve is whether the hypotheses are any good. An agent may not know what genome-wide significance means, or when a colocalization PP4 of 0.6 is compelling versus marginal, or that ARMS2 has been contested in the AMD literature for fifteen years. It generates confidently regardless. At scale that moves the bottleneck from generation to triage. A scientist still has to sort through the output, and now there's more of it.
+At each step, humans perform both compute and read operations. A geneticist takes a GWAS and runs a fine-mapping method to find credible sets. The method is slow. It times out. It gets killed. The human re-runs it and moves on.
 
-There's a second problem sitting underneath that one. When computation and reasoning are tangled together, fine-mapping running inline and the agent reasoning over the output, there's no clean separation between what the tool returned and what the agent inferred. You can't hand a report to a skeptical MD scientist and point to the number, the source, and the version. An agent you can't audit is an agent you can't calibrate, and calibration is what turns generated hypotheses into something a drug discovery team actually acts on.
+Agents can't work this way. And we are asking them to.  We are setting them up for failure.
 
-Both problems point to the same architectural fix: separate reads from writes.
+The arithmetic is unforgiving. A serious AMD target-discovery effort might touch twenty GWAS loci. Each one needs fine-mapping, colocalization, differential expression, variant consequence annotation, pathway enrichment, and literature synthesis before you can say anything mechanistic about it.
 
-The writes, fine-mapping, colocalization, fold prediction, enrichment, happen once, in batch, ahead of hypothesis time. Pre-computed, versioned, pinned to a release. The reads are what the agent does at hypothesis time: single, schema-typed tool calls into pre-computed indices, each returning a structured result with a provenance string. Reasoning happens only at the final step, composing a mechanistic story over the evidence the indices handed it. No inline compute, no retries, no schema drift. Every claim in every report cites the MCP tool that produced it.
+And the space to explore isn't twenty. It's twenty loci × six candidate genes per locus × ten protein states × five pathways × four AMD-relevant cell types. Around 24,000 combinations. Most never get explored.
 
-This is what we mean by an inference-oriented architecture. The agent's job is to reason over pre-built indices, not to run science. That boundary is what makes the output auditable.
+And that's just AMD. The GWAS catalog has millions of variants across thousands of diseases. Each one runs the same combinatorial fan-out.
 
-It doesn't fully solve the validity problem on its own. For that we added a prioritization layer: before any hypothesis reaches a human reviewer, we check it against the published literature. Strong published support moves it up the queue. Weak or absent support flags it for closer scrutiny. The scientist sees candidates in rough order of how much the field already believes them, which is the right starting point for deciding whether to commit wet lab resources.
+Throughput isn't the only problem. Agents lack _scientific_ judgement — they don't have the decades of training or the nuance an average scientist has. They don't know when a colocalization PP4 of 0.6 is compelling versus marginal, or that ARMS2 has been contested in the AMD literature for fifteen years. They generate confidently regardless. We're shifting the bottleneck from hypothesis generation to hypothesis validation.
 
-This post is the v0 working example.
+There's a third problem: forensics. The agent does both the compute and the reasoning. When a number lands in the report, you can't tell whether the tool produced it or the agent inferred it. An MD scientist asking "where did this PP4 of 0.6 come from?" gets no clean answer. You can't fix what you can't trace.
+
+Throughput and forensics point to the same architectural fix: separate reads from writes. Pre-computation enables both.
+
+Writes happen once, in batch, ahead of hypothesis time. Fine-mapping, colocalization, fold prediction, enrichment. Pre-computed. Versioned. Pinned to a release.
+
+Reads are what the agent does at hypothesis time. Single, schema-typed tool calls into pre-computed indices. Each one returns a structured result with a provenance string.
+
+Reasoning happens only at the final step. The agent composes a mechanistic story over the evidence the indices handed it. No inline compute. No retries. No schema drift. Every claim in every report cites the MCP tool that produced it.
+
+We need a name for an environment that lets agents reason at scale. One doesn't exist. So we're calling it an _inference-oriented architecture_. The agent reasons over pre-built indices. It doesn't perform significant computation, because the architecture is built for low-latency operations. Every number in the report now traces back to a single pre-computed source (enabling forensics).
+
+Validation needs a different fix. Before any hypothesis reaches a scientist, we check it against the published literature. Strong support moves it up the queue. Weak or absent support flags it for review. The scientist sees candidates ranked by what the field already supports.
+
+I've built a v0 version of an inference-oriented architecture — described below.
 
 ---
 
@@ -164,7 +179,12 @@ The benchmark script is in the repo (`prototype/scripts/bench_mcp_latency.py`) s
 
 The FastMCP wrapper costs about a millisecond, statistically indistinguishable from a direct Python call. It's well below the noise floor for anything the agent actually does. A pre-joined DuckDB cache matters more: the first cut of `jarvis-ot` queried raw parquets and `l2g_top_genes` took ~4.7 seconds because every call rescanned 200 + 200 + 10 parquet files. Materializing a slim `(studyId, studyLocusId, chromosome, position, geneId, gene_symbol, l2g_score)` join into a 654 MB indexed DuckDB file dropped the same call to 117 ms, about 40× faster, while keeping struct-heavy columns (the credible-set `locus` variant-membership array, the L2G `features` SHAP struct, the `target.transcripts` blob) on parquet for the calls that need them. Those slower calls run once per gene in the workflow, so 300–700 ms each is fine. The cache build runs in ~90 s on 2 GB of RAM with a memory limit and disk spill (`prototype/scripts/build_ot_cache.py`).
 
-What MCP earns at this scale: process isolation, so ESM3 SDK, DuckDB, PyMOL, and PaperClip can't break each other's startup or runtime; schema-first discovery, so the agent reads tool signatures at session start with no prompt engineering needed; auth boundaries, so `jarvis-esm3` owns the Forge key and `jarvis-paperclip` owns the GXL OAuth token and nothing else touches them; and federation, so when the OT parquet store moves to a memory-rich machine and the ESM3 wrapper moves to a GPU box, the agent doesn't notice.
+What MCP earns at this scale:
+
+* **Process isolation.** ESM3 SDK, DuckDB, PyMOL, and PaperClip can't break each other's startup or runtime.
+* **Schema-first discovery.** The agent reads tool signatures at session start. No prompt engineering needed.
+* **Auth boundaries.** `jarvis-esm3` owns the Forge key. `jarvis-paperclip` owns the GXL OAuth token. Nothing else touches them.
+* **Federation.** When the OT parquet store moves to a memory-rich machine and the ESM3 wrapper moves to a GPU box, the agent doesn't notice.
 
 What MCP doesn't buy: speed in the absolute sense, or batch high-throughput. If your workload is a thousand hypotheses per second on a cluster, skip MCP, ship a single binary with everything in-process, and use gRPC or Arrow Flight at the team boundaries.
 
@@ -174,9 +194,13 @@ The right shape is hybrid. MCP at the agent-facing boundary where discovery, iso
 
 ## Why this matters
 
-The test that matters more than throughput numbers: a junior analyst, an MD scientist, and an agent running a thousand investigations in parallel should all execute the same hypothesis flow from the same substrate, without re-running a single compute step. When reads and writes are separated, that becomes possible. The intelligence becomes shared infrastructure. The reasoning becomes the only step that still requires judgment, and because the evidence trail is clean and versioned, you can actually evaluate whether the judgment is good.
+The test that matters more than throughput numbers: a junior analyst, an MD scientist, and an agent running a thousand investigations in parallel should all execute the same hypothesis flow from the same substrate. No-one re-runs compute.
+
+When reads and writes are separated, that becomes possible. The intelligence becomes shared infrastructure. Reasoning is the only step that still requires judgment. And because the evidence trail is clean and versioned, you can actually evaluate whether the judgment is good.
 
 That's what makes agent-generated hypotheses trustworthy enough to act on. Not model capability. Infrastructure.
+
+The shape of the fix isn't unique to biology. Anywhere the question space is combinatorial — materials, chemistry, climate, code — the same separation of reads from writes is what turns an agent from a frustrated single-question worker into something that can actually canvas the space.
 
 v0 is a demo. v1 will be the same shape, with real DE and real pathways behind the last two stubs, and a `jarvis-mr` Mendelian randomization server alongside.
 

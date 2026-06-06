@@ -1,16 +1,20 @@
-# Drug discovery has a reasoning problem (building JARVIS v1)
+# Building JARVIS: an inference-oriented architecture to enable agent-scale reasoning
 
-Biological data has scaled past any single human's capacity to reason over it.  Frontier models allow us to break through human reasoning limitations but the infrastructure we have was not designed for agents.
+Some fields have more questions than humans can ever ask and answer.
 
-We need an "inference-oriented architecture" that supports agentic-driven workflows at scale.  The key change we need to make:  separate reads from writes. Pre-compute all the data we need to "flow" over questions (e.g. fine-mapping, colocalization, fold prediction, enrichment, and literature validation). 
+* In biology: gene × cell × variant × tissue × pathway.
+* In materials science: composition × structure × processing × property.
 
-With such an architecture, I was able to form six AMD mechanistic hypothesis reports along with the evidence that underlies them (C3 R102G, APOE ε4, C9, CETP, ARMS2, TNFRSF10A) in under four minutes.  Generating such reports would take many, many hours for humans to create.  And trying to leverage agents to do this without the pre-computed data would lead to frustration as agents fail because they are marrying compute + inference.   
+The hypotheses scale combinatorially. AMD alone: 20 loci × 6 candidate genes × 10 protein states × 5 pathways × 4 cell types ≈ 24,000 combinations. And that's one disease — the GWAS catalog has millions of variants across thousands.
+
+Now AI agents can finally explore that space. But the infrastructure underneath wasn't built for them. It was built for humans asking one question at a time. Asking an agent to use it sets the agent up for failure.
+
+The fix: an _inference-oriented architecture_. Separate reads from writes. Pre-compute the heavy lifting (fine-mapping, colocalization, fold prediction, enrichment, literature) ahead of time. The agent only reads and reasons. Every number in the report traces back to a pre-computed source — forensics by default.
+
+With this architecture, I generated six AMD mechanistic hypothesis reports — C3 R102G, APOE ε4, C9, CETP, ARMS2, TNFRSF10A — in under four minutes using low-end Digital Ocean machines. The same work takes a human team many, many hours.
 
 Write-up + reports + reproducible benchmark: [GITHUB-README-URL]
 
-90-second demo: [VIDEO-URL]
+Which compute step in your field should move next from per-question to pre-computed?
 
-Which compute step should move next from per-question to pre-computed?
-
-#drugdiscovery #AIxBiology #targetdiscovery #BuildingJARVIS
-
+#AIxScience #agentinfrastructure #drugdiscovery #BuildingJARVIS
