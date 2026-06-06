@@ -77,15 +77,18 @@ Two of the six are coding missense variants in genes with decades of literature,
 
 ### What a report looks like
 
-Each per-target report opens with the L2G score, the lead variant, and an ESM3 cartoon of the protein with the variant residue highlighted where the variant is coding. It then layers:
+Each per-target report opens with the bottom line: a one-line plain-English hypothesis, then an ASCII flow diagram of the variant-to-AMD chain with the supporting evidence in-line on each connector (SHAP features, Reactome pathway IDs, DE log₂FC and padj values, paper IDs). A "How to verify this evidence" block underneath tells you exactly which MCP tool call produced each citation and how to re-derive it.
+
+The body of the report then layers the detail:
 
 - VEP consequence (with PolyPhen / SIFT predictions for missense)
 - L2G SHAP-contributing features, so the reader sees whether distance, coloc, VEP, e2g enhancer-to-gene, or local gene density drove the call
-- ESM3 mean pLDDT + pTM
+- ESM3 mean pLDDT + pTM, with the variant residue PNG embedded inline
 - DE rows for any cell types the v0 atlas covers
 - Reactome pathway membership
 - Top PaperClip papers with summaries and links
-- Full provenance chain, every claim back to a single MCP tool call
+- An agent-composed mechanistic-hypothesis paragraph (written by `claude -p` over the evidence pack at build time; the prose long-form of the ASCII chain at the top)
+- Full provenance chain — every claim back to a single MCP tool call
 
 The C3 report shows the R102 side chain in red against the cyan cartoon. The CETP report shows the full β-barrel fold; the variant is intronic so the whole protein renders. The visual mode adapts to what the variant is.
 
@@ -109,30 +112,63 @@ The stubs are visible by design. Handwaving them would contradict the whole thes
 
 ---
 
+## Throughput: human vs agent
+
+A serious analyst working one of these genes from scratch — querying OT, running ESM3, rendering with PyMOL, pulling DE from an atlas, looking up Reactome, surveying literature, writing the synthesis — is in for about five hours per gene if they're fluent, more like a full day if they're learning the tools. Six genes is a focused week of work. The agent does the same six in roughly four minutes warm, seven and a half cold, because every retrieval step is a pre-computed read and the only thing left to do live is reason over the evidence pack:
+
+| Step | Human | Agent (cold) | Agent (warm) |
+|---|---:|---:|---:|
+| 0. Read GWAS file | 5 min | <0.1 s | <0.1 s |
+| 1–3. Study + credible sets + L2G | 30 min | 125 ms | 125 ms |
+| 4. Gene meta + lead variant × 6 | 60 min | ~4 s | ~4 s |
+| 5a. ESM3 fold × 6 | 90 min | ~3 min | 50 ms |
+| 5b. PyMOL variant render × 6 | 30 min | ~30 s | 50 ms |
+| 6. DE atlas query × 6 | ~4 h | <0.2 s *(v0 mock)* | <0.2 s *(v0 mock)* |
+| 7. Pathway enrichment × 6 | 90 min | <0.2 s *(v0 mock)* | <0.2 s *(v0 mock)* |
+| 8. Literature × 6 | ~3.5 h | ~24 s | ~24 s |
+| 9. Compose hypothesis × 6 (Claude reasoning) | ~7.5 h | ~3.7 min | ~3.7 min |
+| **Total (6 genes)** | **~30 hours** | **~7.5 min** | **~4 min** |
+| **Total per gene** | **~5 hours** | **~75 s** | **~42 s** |
+| **Speedup per gene vs. human** | — | **~240×** | **~430×** |
+
+Both columns include reads *and* writes. The agent's warm case skips compute via cache — which is the whole point of separating reads from writes. You pay the write cost once, amortize it across every subsequent read. The human re-spends the same time the next time they ask the same question.
+
+At a hundred hypotheses the multiplier diverges further: humans stay at ~5 hours per gene with no amortization, while the agent's per-gene cost approaches retrieval (~5 s) plus composition (~37 s) — and the composition parallelizes trivially across cores. That's the architectural argument restated in throughput terms.
+
+The reasoning step now dominates the agent's runtime. Step 9 — Claude composing the mechanistic-hypothesis paragraph over the evidence pack — eats ~87% of the total. The retrieval substrate, after pre-computation, is essentially free. When the only remaining latency is the model thinking, you're in the right architectural regime.
+
+---
+
 ## On MCP latency
 
 Reasonable pushback: if the pitch is "pre-compute aggressively and read fast," doesn't MCP add an IPC layer you don't need? Why not call Python functions directly?
 
-Here's where the time actually goes:
+We measured rather than guessed. Median and p95 over 50 iterations of each `jarvis-ot` tool, 10 iterations of each remote call:
 
-| Operation | Typical latency | Source of cost |
-|---|---:|---|
-| **FastMCP tool dispatch** (JSON args → call → JSON result) | **~1–5 ms** | framework overhead |
-| **Stdio JSON-RPC round-trip** (Claude Code ↔ server) | **~0.1–0.5 ms** | local pipe IO |
-| DuckDB query over OT parquets (`l2g_top_genes`) | 5–50 ms | actual work |
-| Ensembl VEP REST | 200–500 ms | network + remote compute |
-| UniProt REST | 100–300 ms | network |
-| PaperClip search | 5–10 s | remote BM25 + vector search |
-| PyMOL render PNG (ray-tracing on) | 3–10 s | local CPU compute |
-| ESM3 Forge fold (cold, per protein) | 13–30 s | remote GPU compute |
+| Operation | median | p95 | Source of cost |
+|---|---:|---:|---|
+| **FastMCP wrapper around a tool call** | **0.96 ms** | 2.04 ms | framework overhead |
+| `jarvis-ot.study_lookup` (indexed slim cache) | 0.98 ms | 2.16 ms | hot path |
+| `jarvis-ot.credible_sets_for_study` (indexed) | 7.4 ms | 15.1 ms | indexed range scan |
+| `jarvis-ot.l2g_top_genes` (materialized join) | 117 ms | 312 ms | indexed scan over 2.8 M rows |
+| `jarvis-ot.gene_metadata` (parquet view) | 47.6 ms | 58.6 ms | one call per gene |
+| `jarvis-ot.l2g_feature_contributions` | 286 ms | 368 ms | one call per gene |
+| `jarvis-ot.lead_variant_for_locus` | 675 ms | 829 ms | one call per gene |
+| UniProt REST | 584 ms | 606 ms | network |
+| Ensembl VEP REST | 1778 ms | 19844 ms | network + remote, rate-limited tail |
+| PaperClip search | 4186 ms | 14522 ms | remote BM25 + vector search |
+| PyMOL render PNG (ray-traced) | 3–10 s | — | local CPU |
+| ESM3 Forge fold (cold) | 13–30 s | — | remote GPU |
 
-MCP overhead is ~1–5 ms against actual work of 5 ms to 30 s. It's noise.
+The benchmark script is in the repo (`prototype/scripts/bench_mcp_latency.py`) so the numbers are reproducible.
+
+The FastMCP wrapper costs about a millisecond, statistically indistinguishable from a direct Python call. It's well below the noise floor for anything the agent actually does. A pre-joined DuckDB cache matters more: the first cut of `jarvis-ot` queried raw parquets and `l2g_top_genes` took ~4.7 seconds because every call rescanned 200 + 200 + 10 parquet files. Materializing a slim `(studyId, studyLocusId, chromosome, position, geneId, gene_symbol, l2g_score)` join into a 654 MB indexed DuckDB file dropped the same call to 117 ms, about 40× faster, while keeping struct-heavy columns (the credible-set `locus` variant-membership array, the L2G `features` SHAP struct, the `target.transcripts` blob) on parquet for the calls that need them. Those slower calls run once per gene in the workflow, so 300–700 ms each is fine. The cache build runs in ~90 s on 2 GB of RAM with a memory limit and disk spill (`prototype/scripts/build_ot_cache.py`).
 
 What MCP earns at this scale: process isolation, so ESM3 SDK, DuckDB, PyMOL, and PaperClip can't break each other's startup or runtime; schema-first discovery, so the agent reads tool signatures at session start with no prompt engineering needed; auth boundaries, so `jarvis-esm3` owns the Forge key and `jarvis-paperclip` owns the GXL OAuth token and nothing else touches them; and federation, so when the OT parquet store moves to a memory-rich machine and the ESM3 wrapper moves to a GPU box, the agent doesn't notice.
 
 What MCP doesn't buy: speed in the absolute sense, or batch high-throughput. If your workload is a thousand hypotheses per second on a cluster, skip MCP, ship a single binary with everything in-process, and use gRPC or Arrow Flight at the team boundaries.
 
-The right shape is hybrid. MCP at the agent-facing boundary where discovery, isolation, and auth matter. Direct calls within a service. Spark or Polars on the write side. For v0, one user, one machine, six reports in roughly sixty seconds, MCP is the right pick and the overhead is invisible. It stays right through multi-user, multi-trait, dozens of concurrent investigations. It stops being right somewhere around millions of hypotheses per second on a cluster, and at that scale there are other problems to solve first.
+The right shape is hybrid. MCP at the agent-facing boundary where discovery, isolation, and auth matter. Direct calls within a service. Spark or Polars on the write side. For v0, one user, one machine, six reports in about four minutes warm, MCP is the right pick and the overhead is invisible. It stays right through multi-user, multi-trait, dozens of concurrent investigations. It stops being right somewhere around millions of hypotheses per second on a cluster, and at that scale there are other problems to solve first.
 
 ---
 
@@ -148,7 +184,7 @@ v0 is a demo. v1 will be the same shape, with real DE and real pathways behind t
 
 ## Try it
 
-Repo at `[repo URL]`. Full workflow at `prototype/mcp_servers/`; AMD demo input at `samples/amd_fritsche_2016.sumstats.tsv`. With Claude Code installed and `.mcp.json` picked up, hand the agent the sumstats file, the workflow ID resolves automatically, and you watch six reports get generated.
+Repo at <https://github.com/dorkosaurus/JARVIS_for_bio>. Full workflow at `prototype/mcp_servers/`; AMD demo input at `samples/amd_fritsche_2016.sumstats.tsv`. With Claude Code installed and `.mcp.json` picked up, hand the agent the sumstats file, the workflow ID resolves automatically, and you watch six reports get generated.
 
 Video walkthrough: `[video URL]`.
 
