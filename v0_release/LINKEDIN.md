@@ -13,7 +13,7 @@ The fix: an _inference-oriented architecture_. Separate reads from writes. Pre-c
 
 With this architecture, I generated six AMD mechanistic hypothesis reports — C3 R102G, APOE ε4, C9, CETP, ARMS2, TNFRSF10A — in under four minutes using low-end Digital Ocean machines. The same work takes a human team many, many hours.
 
-Write-up + reports + reproducible benchmark: [GITHUB-README-URL]
+Write-up + reports + reproducible benchmark: https://github.com/dorkosaurus/JARVIS_for_bio/blob/main/v0_release/README.md
 
 Which compute step in your field should move next from per-question to pre-computed?
 
