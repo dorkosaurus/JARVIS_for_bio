@@ -10,7 +10,9 @@
 ### We have the target. How do we design the therapeutic?
 **[TALKING HEAD · 0:00–0:35]**
 
-Two weeks ago I showed how an AI system could generate six therapeutic hypotheses for AMD targets in under four minutes. One of these was complement gene C9 — with the hypothesis that a genetic variant was driving excess complement activation in the back of the eye, ultimately destroying photoreceptors.
+Two weeks ago I showed how an AI system could generate six therapeutic hypotheses for AMD targets in under four minutes. 
+
+One of these was the complement gene C9 — with the hypothesis that a genetic variant was driving excess complement activation in the back of the eye, ultimately destroying photoreceptors.
 
 This sprint I asked a different question. We have the target. How do we design the therapeutic?
 
