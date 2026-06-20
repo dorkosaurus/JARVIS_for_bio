@@ -12,57 +12,9 @@ then deployed in a 10-cycle closed loop to explore the Pareto frontier of
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    subgraph L1["Layer 1 — Generative"]
-        G["Capsid generator<br/>AAV2 VP1 wildtype + VR-IV/V/VIII/IX swaps<br/>+ 7-mer insertions @ 587"]
-    end
+![world model architecture](outputs/world_model.png)
 
-    subgraph L2["Layer 2 — Features"]
-        E["ESM3 embedder<br/>esmc-6b-2024-12 via Forge<br/>2560-d mean-pooled + pseudo-LL"]
-    end
-
-    subgraph L3["Layer 3 — World model"]
-        W["Multi-output GP (BoTorch)<br/>input: PCA(16) + 4 engineered features<br/>output: μ, σ² for each of 3 axes"]
-        Y1[("rpe_transduction")]
-        Y2[("neut_escape")]
-        Y3[("inflammation_score<br/>(constraint)")]
-        W --> Y1
-        W --> Y2
-        W --> Y3
-    end
-
-    subgraph L4["Layer 4 — Closed loop"]
-        P["RL policy (MLP, 11.7k params)<br/>input: PCA(16) + 4 engineered + 6 GP outputs<br/>output: selection score"]
-        F["Constraint filter<br/>(predicted inflammation &lt; 0.40)"]
-        S["Top-k sampler<br/>(Gumbel-top-k, k=5)"]
-        SIM["Wet-lab simulator (v1 only)<br/>**load-bearing mock**<br/>calibrated to Dalkara/Byrne/Kotterman/Reichel"]
-        P --> F --> S --> SIM
-    end
-
-    OBS[("observations<br/>(SQLite results.db)")]
-    PUB[("public data<br/>(Dalkara, Byrne,<br/>Kotterman, Reichel)")]
-
-    G -->|80 VP1 variants| E
-    E -->|embeddings| W
-    E -->|embeddings| P
-    Y1 --> P
-    Y2 --> P
-    Y3 --> F
-    SIM -->|3 outcomes per pick| OBS
-    PUB -.->|45 anchor rows| OBS
-    OBS -.->|refit each cycle| W
-    OBS -.->|REINFORCE on ΔHV| P
-
-    classDef mock stroke:#d97706,stroke-width:2px,fill:#fff7ed
-    classDef constraint stroke:#dc2626,stroke-width:1.5px,fill:#fef2f2
-    class SIM mock
-    class Y3,F constraint
-```
-
-The closed loop is defined by what feeds it. In v1 the evidence source is
-the simulator. In v2+ the same interface swaps in the real wet lab; every
-other box stays.
+Regenerate with `python visualization/world_model.py`.
 
 ## The load-bearing mock
 
