@@ -20,16 +20,16 @@ import config
 W, H = 16.0, 11.0
 LAYER_H = 1.95           # height of each pastel band
 LAYER_GAP = 0.65         # whitespace gap between bands (for arrows + labels)
-LEFT_MARGIN = 2.20       # dedicated column for rotated layer names
+LEFT_MARGIN = 1.70       # dedicated column for wrapped layer names
 RIGHT_MARGIN = 1.80      # dedicated column for the feedback-loop arrow
 LAYER_X0 = LEFT_MARGIN
 LAYER_X1 = W - RIGHT_MARGIN
 
 LAYERS = [
-    ("Layer 1 — Generative",         "#ede9fe", "#7c3aed", "white"),
-    ("Layer 2 — Feature engineering","#dcfce7", "#15803d", "white"),
-    ("Layer 3 — World model",        "#dbeafe", "#1d4ed8", "white"),
-    ("Layer 4 — RL policy + wet lab","#fed7aa", "#c2410c", "white"),
+    ("Layer 1\nGenerative",          "#ede9fe", "#7c3aed", "white"),
+    ("Layer 2\nFeature\nengineering","#dcfce7", "#15803d", "white"),
+    ("Layer 3\nWorld\nmodel",        "#dbeafe", "#1d4ed8", "white"),
+    ("Layer 4\nRL policy\n+ wet lab","#fed7aa", "#c2410c", "white"),
 ]
 
 BOXES = [
@@ -110,12 +110,12 @@ def main(out_path: Path = config.OUTPUTS_DIR / "world_model.png") -> None:
             facecolor=bg, edgecolor="none", zorder=1,
         ))
 
-        # Rotated layer label in the dedicated left margin
-        # Place the rotated text in the middle of the left margin so its
-        # bounding box doesn't run into the pastel band.
+        # Horizontal multi-line layer label in the dedicated left margin
+        # (no rotation — easier to read, fits naturally inside the band height).
         ax.text(LEFT_MARGIN / 2, (y0 + y1) / 2, label,
-                ha="center", va="center", rotation=90,
-                fontsize=11.5, fontweight="bold", color="#1f2937", zorder=2)
+                ha="center", va="center",
+                fontsize=11, fontweight="bold", color="#1f2937",
+                linespacing=1.25, zorder=2)
 
         # Boxes inside the band
         n = len(boxes)
