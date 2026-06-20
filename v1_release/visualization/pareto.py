@@ -59,7 +59,7 @@ def main(
 ) -> None:
     df = pd.read_parquet(parquet_path)
 
-    fig, ax = plt.subplots(figsize=(10, 7))
+    fig, ax = plt.subplots(figsize=(13, 7))
 
     # --- Safe therapeutic window (green shading) ---
     ax.add_patch(plt.Rectangle(
@@ -147,20 +147,29 @@ def main(
             linewidths=1.2, zorder=9,
             label=f"{a['anchor_label']} (anchor)",
         )
+        # Position label offset varies by anchor to avoid the legend / axis area
+        if a["anchor_label"] == "AAV2":
+            xy_off = (14, 12)
+        else:  # AAV7m8
+            xy_off = (12, 8)
         ax.annotate(
             a["anchor_label"],
             (a["rpe_transduction"], a["neut_escape"]),
-            xytext=(10, 8), textcoords="offset points",
-            fontsize=10, fontweight="bold", zorder=10,
+            xytext=xy_off, textcoords="offset points",
+            fontsize=11, fontweight="bold", zorder=11,
+            bbox=dict(boxstyle="round,pad=0.18", facecolor="white",
+                      edgecolor="none", alpha=0.85),
         )
 
-    # --- Reference threshold lines ---
+    # --- Reference threshold lines (labels placed top-right of intersections) ---
     ax.axvline(MIN_TRANSDUCTION, color="grey", linestyle=":", alpha=0.6, linewidth=0.9)
     ax.axhline(MIN_ESCAPE, color="grey", linestyle=":", alpha=0.6, linewidth=0.9)
-    ax.text(MIN_TRANSDUCTION + 0.005, 0.005, f"min transduction = {MIN_TRANSDUCTION}",
-            fontsize=7, color="#555555", style="italic")
-    ax.text(0.005, MIN_ESCAPE + 0.005, f"min escape = {MIN_ESCAPE}",
-            fontsize=7, color="#555555", style="italic")
+    # Move threshold labels to the upper-left corner so they don't collide with
+    # the AAV2 anchor or the legend at the bottom.
+    ax.text(MIN_TRANSDUCTION + 0.005, 1.005, f"min transduction = {MIN_TRANSDUCTION}",
+            fontsize=8, color="#555555", style="italic", va="top")
+    ax.text(0.005, MIN_ESCAPE - 0.005, f"min escape = {MIN_ESCAPE}",
+            fontsize=8, color="#555555", style="italic", va="top")
 
     ax.set_xlim(-0.02, 1.02)
     ax.set_ylim(-0.02, 1.02)
@@ -173,7 +182,12 @@ def main(
         "inflammation-safety constraint",
         fontsize=10, style="italic", pad=8,
     )
-    ax.legend(loc="lower left", fontsize=8, framealpha=0.92)
+    # Legend outside the plot to the right of the colorbar so it doesn't
+    # collide with the AAV2 anchor or the data in the lower-left corner.
+    ax.legend(
+        loc="upper left", bbox_to_anchor=(1.13, 1.0),
+        fontsize=9, framealpha=0.95, borderaxespad=0.0,
+    )
     ax.grid(alpha=0.2)
 
     # Honesty footer
