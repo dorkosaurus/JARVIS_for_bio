@@ -160,6 +160,74 @@ def generate_insertion_variants(
     return variants
 
 
+def stacked_residue_pool() -> list[int]:
+    """1-indexed residue positions for stacked-variant substitutions (non-VIII loops)."""
+    positions = []
+    for loop_name in config.STACKED_SUBSTITUTION_LOOPS:
+        start, end = config.VR_LOOPS[loop_name]
+        positions.extend(range(start, end + 1))
+    return positions
+
+
+def generate_stacked_variants(
+    wt_seq: str, n: int, rng: np.random.Generator
+) -> list[dict]:
+    """7-mer insertion at 587 + 2-4 substitutions at non-VIII VR loops.
+
+    Stacking the AAV.7m8 trick (insertion drives transduction) with epitope
+    erosion at distant VR loops (substitutions drive escape) is the move that
+    can put a capsid into the target zone — both axes high simultaneously,
+    without disrupting the insertion site itself.
+    """
+    pos = config.INSERTION_AFTER_RESIDUE
+    sub_pool = stacked_residue_pool()
+    library = list(INSERTION_LIBRARY)
+
+    variants: list[dict] = []
+    seen: set[str] = set()
+    attempts = 0
+    while len(variants) < n:
+        attempts += 1
+        if attempts > 50 * n:
+            raise RuntimeError(
+                f"Could not generate {n} unique stacked variants after {attempts} attempts."
+            )
+        peptide = str(rng.choice(library))
+        k = int(rng.integers(config.MIN_STACKED_SUBSTITUTIONS,
+                             config.MAX_STACKED_SUBSTITUTIONS + 1))
+        positions = sorted(int(p) for p in rng.choice(sub_pool, size=k, replace=False))
+
+        new = list(wt_seq)
+        sub_mutations: list[str] = []
+        for p in positions:
+            wt_aa = wt_seq[p - 1]
+            alt = pick_alternative_aa(wt_aa, rng)
+            new[p - 1] = alt
+            sub_mutations.append(f"{wt_aa}{p}{alt}")
+        substituted = "".join(new)
+        # Insert peptide between residues 587 and 588 of the substituted sequence
+        stacked_seq = substituted[:pos] + peptide + substituted[pos:]
+
+        if stacked_seq in seen:
+            continue
+        seen.add(stacked_seq)
+
+        mutations = f"ins{pos}_{pos+1}:{peptide}+" + ",".join(sub_mutations)
+        variants.append(
+            {
+                "sequence": stacked_seq,
+                "class": "stacked",
+                "mutations": mutations,
+                "has_7mer_insertion": True,
+                "insertion_peptide": peptide,
+                "insertion_length": len(peptide),
+                # Total structural change from AAV2: insertion length + substitutions
+                "hamming_to_aav2": len(peptide) + k,
+            }
+        )
+    return variants
+
+
 def write_fasta(variants: list[dict], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w") as f:
@@ -194,25 +262,20 @@ def main() -> None:
     inserts = generate_insertion_variants(
         wt_seq, config.N_INSERTION_VARIANTS, rng
     )
-    variants = subs + inserts
+    stacked = generate_stacked_variants(
+        wt_seq, config.N_STACKED_VARIANTS, rng
+    )
+    variants = subs + inserts + stacked
 
     write_fasta(variants, config.CAPSID_VARIANTS_FASTA)
 
-    sub_lens = [len(v["sequence"]) for v in subs]
-    ins_lens = [len(v["sequence"]) for v in inserts]
-    ins_peptide_lens = [v["insertion_length"] for v in inserts]
     hamming = [v["hamming_to_aav2"] for v in variants]
-
     print(f"Wrote {config.CAPSID_VARIANTS_FASTA}")
     print(f"  substitution variants:  {len(subs)}")
     print(f"  insertion variants:     {len(inserts)}")
+    print(f"  stacked variants:       {len(stacked)}  (insertion + non-VIII substitutions)")
     print(f"  total:                  {len(variants)}")
     print(f"  AAV2 reference length:  {len(wt_seq)} aa")
-    print(f"  substitution lengths:   {min(sub_lens)}-{max(sub_lens)} aa")
-    print(
-        f"  insertion lengths:      {min(ins_lens)}-{max(ins_lens)} aa  "
-        f"(peptides {min(ins_peptide_lens)}-{max(ins_peptide_lens)} aa)"
-    )
     print(f"  hamming-to-AAV2 range:  {min(hamming)}-{max(hamming)}")
 
 

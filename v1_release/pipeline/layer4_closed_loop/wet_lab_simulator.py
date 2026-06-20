@@ -33,8 +33,15 @@ def peptide_quality(peptide: str | None) -> float:
 
 
 def fitness_penalty(hamming_to_aav2: int) -> float:
-    """0..1; rises past hamming=10 (capsid folding / packaging cliff)."""
-    excess = max(0, hamming_to_aav2 - 10)
+    """0..1; rises past hamming=14 (capsid folding / packaging cliff).
+
+    Cliff raised from 10 → 14 so stacked variants (insertion + 2-4 substitutions
+    on non-VIII VR loops) fit comfortably. Published combination capsids
+    (4D-R100 family, peptide-display variants with multiple loop edits) suggest
+    AAV2 backbones can tolerate ~13-15 total structural changes before
+    packaging / virion stability fails.
+    """
+    excess = max(0, hamming_to_aav2 - 14)
     return float(np.tanh(excess / 6.0))
 
 
@@ -57,17 +64,28 @@ def simulate_wet_lab(
     fp = fitness_penalty(hamming_to_aav2)
     fitness_factor = 1.0 - 0.6 * fp
 
+    # Number of point substitutions on the AAV2 backbone (excluding the inserted
+    # peptide, whose residues are at novel positions). For insertion-only
+    # variants this is 0; for stacked variants it counts the VR-loop swaps.
+    sub_count = max(0, hamming_to_aav2 - insertion_length) if has_7mer_insertion else hamming_to_aav2
+
     # --- Axis 1: RPE transduction (intravitreal) ---
     # AAV.7m8-like insertions (pq ~ 1.0) get the full 0.40 bonus.
     transduction = (0.015 + 0.40 * pq) * fitness_factor
 
     # --- Axis 2: NAb escape ---
-    # Substitution variants escape via VR-loop disruption (~ hamming).
-    # Insertion variants escape via peptide novelty + insertion size.
-    if has_7mer_insertion:
-        escape_change = 0.10 * pq + 0.10 * (insertion_length / 9.0)
+    # Three contributions, in increasing biological specificity:
+    #   - peptide novelty + insertion size (insertion-only motif)
+    #   - VR-loop substitutions erode existing antibody epitopes
+    #   - stacked synergy: when both present, antibody recognition collapses
+    #     across multiple surfaces simultaneously
+    escape_from_ins = (0.10 * pq + 0.10 * (insertion_length / 9.0)) if has_7mer_insertion else 0.0
+    escape_from_subs = 0.45 * (1.0 - np.exp(-sub_count / 3.0))
+    if has_7mer_insertion and sub_count > 0:
+        synergy = 0.15 * np.tanh(pq * sub_count / 3.0)
     else:
-        escape_change = 0.30 * (1.0 - np.exp(-hamming_to_aav2 / 4.0))
+        synergy = 0.0
+    escape_change = escape_from_ins + escape_from_subs + synergy
     neut_escape = (0.10 + escape_change) * fitness_factor
 
     # --- Constraint: inflammation_score ---

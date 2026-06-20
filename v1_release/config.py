@@ -46,9 +46,16 @@ INSERTION_AFTER_RESIDUE = 587  # 1-indexed; insert between 587 and 588
 # --- Variant generation ---
 N_SUBSTITUTION_VARIANTS = 50
 N_INSERTION_VARIANTS = 30
+N_STACKED_VARIANTS = 40        # 7-mer insertion + 2-4 substitutions at non-VIII VR loops
 MIN_SUBSTITUTIONS_PER_VARIANT = 1
 MAX_SUBSTITUTIONS_PER_VARIANT = 6
+MIN_STACKED_SUBSTITUTIONS = 2
+MAX_STACKED_SUBSTITUTIONS = 4
 RNG_SEED = 0
+
+# Non-VIII VR loops eligible for stacking with a 7-mer insertion
+# (VR-VIII is the insertion site itself; mutating it would interfere)
+STACKED_SUBSTITUTION_LOOPS = ["VR-IV", "VR-V", "VR-IX"]
 
 # --- Closed-loop hyperparameters (used in later phases) ---
 INFLAMMATION_THRESHOLD = 0.40
