@@ -10,7 +10,7 @@
 ### We have the target. How do we design the therapeutic?
 **[TALKING HEAD · 0:00–0:35]**
 
-Two weeks ago I showed how an AI system could generate six drug targets for age-related macular degeneration in four minutes. One of them was complement gene C9 — with a hypothesis that a genetic variant was driving excess complement activation in the back of the eye, ultimately destroying photoreceptors.
+Two weeks ago I showed how an AI system could generate six therapeutic hypotheses for AMD targets for AMD in under four minutes. One of these was complement gene C9 — with the hypothesis that a genetic variant was driving excess complement activation in the back of the eye, ultimately destroying photoreceptors.
 
 This sprint I asked a different question. We have the target. How do we design the therapeutic?
 
@@ -20,15 +20,26 @@ This sprint I asked a different question. We have the target. How do we design t
 ### The design space exceeds 10¹¹. Directed evolution samples it blind.
 **[TALKING HEAD · 0:35–1:20]**
 
-The therapeutic approach is gene therapy — deliver a gene directly to retinal cells that produces a protein to neutralize the complement cascade locally. Potentially a one-time treatment.
+The therapeutic approach is gene therapy.  We want to transduce a gene directly into retinal cells to produces a protein that neutralizes the complement cascade locally.   This is compelling because it's potentially a one-time treatment.
 
 The delivery vehicle is an engineered virus called AAV2. And this is where the hard problem lives.
 
-AAV2 has a protein shell — a capsid — of 735 amino acids. About 60 of those residues control two things simultaneously: whether the virus gets into the right cells in the eye, and whether the patient's immune system recognizes and destroys it before it ever gets there. AAV2 seroprevalence runs 50 to 70 percent in adults. You have to engineer your way out.
+AAV2 has a protein shell — a capsid — of 735 residues. About 60 of those  control two things: 
 
-And the design space for that engineering problem exceeds ten-to-the-eleven possibilities. No directed evolution campaign — the standard approach in the field — will ever meaningfully cover that space. It works; we have gene therapies in the clinic. But it's blind sampling. It has no model of the space, no way to navigate tradeoffs, no principled way to enforce a safety constraint during selection.
+* First, they control whether the virus gets delivered into the right cells.
+* Second, they control whether the patient's immune system recognizes and destroys the virus via neutralizing antibodies before they have a chance to get there.  This is especially challenging because 50-70% of the adult population already have immune cells against AAV2.  
 
-A world model changes that.
+We cannot use naive AAV2 to deliver this gene - we need an engineered variant.  
+
+And the design space for that engineering problem exceeds ten-to-the-eleven possibilities. 
+
+The standard approach in the field (directed evolution_) will never meaningfully cover that space. Directed evolution works: we have gene therapies in the clinic. 
+
+But it's blind sampling. 
+
+It has no model of the space, no way to navigate tradeoffs, no principled way to enforce a safety constraint during selection.
+
+A world model can change all of that.
 
 ---
 
