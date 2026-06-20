@@ -59,7 +59,7 @@ def main(
 ) -> None:
     df = pd.read_parquet(parquet_path)
 
-    fig, ax = plt.subplots(figsize=(13, 7))
+    fig, ax = plt.subplots(figsize=(10, 8.4))
 
     # --- Safe therapeutic window (green shading) ---
     ax.add_patch(plt.Rectangle(
@@ -182,11 +182,11 @@ def main(
         "inflammation-safety constraint",
         fontsize=10, style="italic", pad=8,
     )
-    # Legend outside the plot to the right of the colorbar so it doesn't
-    # collide with the AAV2 anchor or the data in the lower-left corner.
+    # Legend below the plot so it doesn't collide with anchors or the
+    # threshold labels in any corner. Multi-column for compactness.
     ax.legend(
-        loc="upper left", bbox_to_anchor=(1.13, 1.0),
-        fontsize=9, framealpha=0.95, borderaxespad=0.0,
+        loc="upper center", bbox_to_anchor=(0.5, -0.10),
+        fontsize=9, framealpha=0.95, ncol=4, borderaxespad=0.0,
     )
     ax.grid(alpha=0.2)
 
