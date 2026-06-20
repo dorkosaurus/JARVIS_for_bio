@@ -10,7 +10,7 @@
 ### We have the target. How do we design the therapeutic?
 **[TALKING HEAD · 0:00–0:35]**
 
-Two weeks ago I showed how an AI system could generate six therapeutic hypotheses for AMD targets for AMD in under four minutes. One of these was complement gene C9 — with the hypothesis that a genetic variant was driving excess complement activation in the back of the eye, ultimately destroying photoreceptors.
+Two weeks ago I showed how an AI system could generate six therapeutic hypotheses for AMD targets in under four minutes. One of these was complement gene C9 — with the hypothesis that a genetic variant was driving excess complement activation in the back of the eye, ultimately destroying photoreceptors.
 
 This sprint I asked a different question. We have the target. How do we design the therapeutic?
 
@@ -20,7 +20,7 @@ This sprint I asked a different question. We have the target. How do we design t
 ### The design space exceeds 10¹¹. Directed evolution samples it blind.
 **[TALKING HEAD · 0:35–1:20]**
 
-The therapeutic approach is gene therapy.  We want to transduce a gene directly into retinal cells to produces a protein that neutralizes the complement cascade locally.   This is compelling because it's potentially a one-time treatment.
+The therapeutic approach is gene therapy.  We want to transduce a gene directly into retinal cells to produce a protein that neutralizes the complement cascade locally.   This is compelling because it's potentially a one-time treatment.
 
 The delivery vehicle is an engineered virus called AAV2. And this is where the hard problem lives.
 
@@ -49,7 +49,7 @@ A world model can change all of that.
 
 This is the architecture I built.
 
-Layer one is generative — it produces about 80 capsid variants by making substitutions at the variable regions that drive both tropism and and antibody recognition.   And, by inserting peptide sequences at the site used by AAV.7m8, the best intravitreal capsid in the literature, we ensure that the virus can infiltrate retinal pigment epithelial cells.  
+Layer one is generative — it produces about 80 capsid variants by making substitutions at the variable regions that drive both tropism and antibody recognition.   And, by inserting peptide sequences at the site used by AAV.7m8, the best intravitreal capsid in the literature, we ensure that the virus can infiltrate retinal pigment epithelial cells.  
 
 Layer two is feature engineering.   ESM3, EvolutionaryScale's protein language model, embeds each variant sequence into a 2560-dimensional vector that captures something about its structure and likely function.
 
@@ -96,7 +96,7 @@ And here's why the closed loop matters. This is Pareto hypervolume over cycles �
 
 So to summarize, in the previous sprint, I showed how we could leverage AI to scale exploration of hypothesis space. 
 
-In this sprint, I showed how we can leverage AI to scale our ability to therapeutic design space. 
+In this sprint, I showed how we can leverage AI to scale our ability to explore therapeutic design space. 
 
 This uses the same inference-oriented architecture. But it's one step further towards creating JARVIS for biology.
 
