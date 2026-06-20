@@ -93,12 +93,19 @@ And here's why the closed loop matters. This is Pareto hypervolume over cycles �
 ### Same architecture. One leg further.
 **[TALKING HEAD · 2:40–3:00]**
 
+When I started this 100-day sprint, I laid out three capabilities that JARVIS for biology needs to have. 
 
-So to summarize, in the previous sprint, I showed how we could leverage AI to scale exploration of hypothesis space. 
+The ability to form hypotheses at scale. 
 
-In this sprint, I showed how we can leverage AI to scale our ability to explore therapeutic design space. 
+The ability to experimentally test them at scale. 
 
-This uses the same inference-oriented architecture. But it's one step further towards creating JARVIS for biology.
+And the ability to speed information flow across silos.
+
+My previous sprint checked the first box. 
+
+The current sprint checks the second.
+
+One sprint left.
 
 Full write-up, figures, and code are in the repo — link in the comments.
 
