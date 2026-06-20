@@ -1,8 +1,9 @@
 """World-model architecture diagram for the v1 AAV capsid optimization pipeline.
 
-Matches the reference at repo root (world_model.png): 4 horizontal layers
-with pastel backgrounds, colored boxes containing the components in each
-layer, arrows showing data flow + closed-loop feedback.
+4 horizontal pastel layers (generative / features / world model / RL+wet lab).
+Layer labels sit in a dedicated left margin (no collision with bands).
+Down arrows live in dedicated inter-layer gaps with labels on white space.
+Right-side feedback loop shows observations refitting the GP + REINFORCE.
 """
 
 import sys
@@ -16,21 +17,21 @@ import config
 
 # --- Layout constants -----------------------------------------------------
 
-W, H = 14.0, 8.6
-LAYER_H = 1.9       # height of each horizontal band
-LAYER_GAP = 0.05    # gap between bands
-LAYER_X0 = 0.55
-LAYER_X1 = W - 0.25
+W, H = 16.0, 11.0
+LAYER_H = 1.95           # height of each pastel band
+LAYER_GAP = 0.65         # whitespace gap between bands (for arrows + labels)
+LEFT_MARGIN = 2.20       # dedicated column for rotated layer names
+RIGHT_MARGIN = 1.80      # dedicated column for the feedback-loop arrow
+LAYER_X0 = LEFT_MARGIN
+LAYER_X1 = W - RIGHT_MARGIN
 
-# Each layer: (label, background color, box fill color, box text color)
 LAYERS = [
-    ("Layer 1 — Generative",        "#ede9fe", "#7c3aed", "white"),
+    ("Layer 1 — Generative",         "#ede9fe", "#7c3aed", "white"),
     ("Layer 2 — Feature engineering","#dcfce7", "#15803d", "white"),
-    ("Layer 3 — World model",       "#dbeafe", "#1d4ed8", "white"),
+    ("Layer 3 — World model",        "#dbeafe", "#1d4ed8", "white"),
     ("Layer 4 — RL policy + wet lab","#fed7aa", "#c2410c", "white"),
 ]
 
-# Box content per layer: list of (title, caption, optional marker)
 BOXES = [
     [  # Layer 1
         ("Substitution variants",
@@ -64,12 +65,19 @@ BOXES = [
     ],
     [  # Layer 4
         ("RL policy",
-         "MLP, 11.7k params. REINFORCE on\nPareto-hypervolume improvement.",
+         "MLP, 11.7k params. REINFORCE\non Pareto-hypervolume improvement.",
          None),
         ("Wet-lab simulator",
          "Load-bearing mock.\nCalibrated to literature.",
          "mock"),
     ],
+]
+
+# Labels for the inter-layer down arrows
+ARROW_LABELS = [
+    "VP1 sequences",
+    "ESM3 features",
+    "μ, σ² per output",
 ]
 
 
@@ -79,40 +87,44 @@ def main(out_path: Path = config.OUTPUTS_DIR / "world_model.png") -> None:
     ax.set_ylim(0, H)
     ax.axis("off")
 
-    # --- Title ---
-    ax.text(W / 2, H - 0.25, "JARVIS-for-bio v1 — AAV capsid optimization (AMD)",
-            ha="center", va="top", fontsize=15, fontweight="bold")
-    ax.text(W / 2, H - 0.65,
+    # --- Title block --------------------------------------------------------
+    ax.text(W / 2, H - 0.30,
+            "JARVIS-for-bio v1 — AAV capsid optimization (AMD)",
+            ha="center", va="top", fontsize=16, fontweight="bold")
+    ax.text(W / 2, H - 0.80,
             "Closed-loop world model: cached ESM3 embeddings + GP + RL policy + "
             "biologically grounded simulator",
-            ha="center", va="top", fontsize=10, style="italic", color="#444")
+            ha="center", va="top", fontsize=10.5, style="italic", color="#444")
 
-    # --- Layers (top-to-bottom: Layer 1 on top) ---
-    top_y = H - 1.1
-    layer_centers = []
+    # --- Layers (top-to-bottom) --------------------------------------------
+    top_y = H - 1.35
+    layer_y = []  # list of (y_bottom, y_top) for each layer band
     for i, ((label, bg, fill, txt), boxes) in enumerate(zip(LAYERS, BOXES)):
         y1 = top_y - i * (LAYER_H + LAYER_GAP)
         y0 = y1 - LAYER_H
-        layer_centers.append((y0, y1))
+        layer_y.append((y0, y1))
 
-        # Background band
+        # Background pastel band (only spans the inner column)
         ax.add_patch(Rectangle(
             (LAYER_X0, y0), LAYER_X1 - LAYER_X0, LAYER_H,
             facecolor=bg, edgecolor="none", zorder=1,
         ))
-        # Layer label on the left (rotated)
-        ax.text(LAYER_X0 - 0.18, (y0 + y1) / 2, label,
-                ha="center", va="center", rotation=90,
-                fontsize=10, fontweight="bold", color="#374151", zorder=2)
 
-        # Boxes
+        # Rotated layer label in the dedicated left margin
+        # Place the rotated text in the middle of the left margin so its
+        # bounding box doesn't run into the pastel band.
+        ax.text(LEFT_MARGIN / 2, (y0 + y1) / 2, label,
+                ha="center", va="center", rotation=90,
+                fontsize=11.5, fontweight="bold", color="#1f2937", zorder=2)
+
+        # Boxes inside the band
         n = len(boxes)
-        usable_w = LAYER_X1 - LAYER_X0 - 0.4
-        gap = 0.30
-        box_w = (usable_w - gap * (n - 1)) / n
+        usable_w = LAYER_X1 - LAYER_X0 - 0.5
+        inner_gap = 0.32
+        box_w = (usable_w - inner_gap * (n - 1)) / n
         box_h = LAYER_H - 0.50
         for j, (title, caption, marker) in enumerate(boxes):
-            x = LAYER_X0 + 0.20 + j * (box_w + gap)
+            x = LAYER_X0 + 0.25 + j * (box_w + inner_gap)
             y = y0 + 0.25
             ax.add_patch(FancyBboxPatch(
                 (x, y), box_w, box_h,
@@ -120,72 +132,64 @@ def main(out_path: Path = config.OUTPUTS_DIR / "world_model.png") -> None:
                 facecolor=fill, edgecolor="black", linewidth=0.6,
                 alpha=0.95, zorder=3,
             ))
-            ax.text(x + box_w / 2, y + box_h - 0.18, title,
+            ax.text(x + box_w / 2, y + box_h - 0.22, title,
                     ha="center", va="top",
-                    fontsize=11, fontweight="bold", color=txt, zorder=4)
-            ax.text(x + box_w / 2, y + box_h - 0.55, caption,
+                    fontsize=11.5, fontweight="bold", color=txt, zorder=4)
+            ax.text(x + box_w / 2, y + box_h - 0.65, caption,
                     ha="center", va="top",
-                    fontsize=8.5, color=txt, zorder=4)
-            if marker == "v2":
-                ax.add_patch(FancyBboxPatch(
-                    (x + box_w - 0.45, y + box_h - 0.30), 0.40, 0.25,
-                    boxstyle="round,pad=0.01,rounding_size=0.04",
-                    facecolor="white", edgecolor="black", linewidth=0.5, zorder=5,
-                ))
-                ax.text(x + box_w - 0.25, y + box_h - 0.175, "v2+",
-                        ha="center", va="center",
-                        fontsize=7, fontweight="bold", color="#1f2937", zorder=6)
+                    fontsize=9, color=txt, zorder=4)
             if marker == "mock":
                 ax.add_patch(FancyBboxPatch(
-                    (x + box_w - 0.55, y + box_h - 0.30), 0.50, 0.25,
+                    (x + box_w - 0.62, y + box_h - 0.32), 0.52, 0.26,
                     boxstyle="round,pad=0.01,rounding_size=0.04",
                     facecolor="#fff7ed", edgecolor="#c2410c", linewidth=0.6, zorder=5,
                 ))
-                ax.text(x + box_w - 0.30, y + box_h - 0.175, "mock",
+                ax.text(x + box_w - 0.36, y + box_h - 0.19, "mock",
                         ha="center", va="center",
-                        fontsize=7, fontweight="bold", color="#c2410c", zorder=6)
+                        fontsize=7.5, fontweight="bold", color="#c2410c", zorder=6)
 
-    # --- Down-arrows (data flow between layers) ---
-    def down_arrow(x, y_top, y_bot, label=None, color="#374151"):
+    # --- Down arrows + their labels (in inter-layer whitespace) ------------
+    arrow_x = (LAYER_X0 + LAYER_X1) / 2
+    for i in range(3):
+        top = layer_y[i][0]      # bottom edge of layer i
+        bot = layer_y[i + 1][1]  # top edge of layer i+1
+        # Arrow with small inset from band edges
         a = FancyArrowPatch(
-            (x, y_top), (x, y_bot),
-            arrowstyle="-|>", mutation_scale=14,
-            color=color, linewidth=1.4, zorder=7,
+            (arrow_x, top - 0.08), (arrow_x, bot + 0.08),
+            arrowstyle="-|>", mutation_scale=18,
+            color="#374151", linewidth=1.8, zorder=7,
         )
         ax.add_patch(a)
-        if label:
-            ax.text(x + 0.12, (y_top + y_bot) / 2, label,
-                    fontsize=8, color=color, va="center")
+        # Label sits to the right of the arrow, vertically centered in the gap
+        ax.text(arrow_x + 0.22, (top + bot) / 2, ARROW_LABELS[i],
+                fontsize=9.5, color="#374151", va="center", ha="left",
+                fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.18", facecolor="white",
+                          edgecolor="#d1d5db", linewidth=0.5))
 
-    # L1 -> L2
-    down_arrow(W / 2, layer_centers[0][0] - 0.01, layer_centers[1][1] + 0.01,
-               label="VP1 sequences")
-    # L2 -> L3
-    down_arrow(W / 2, layer_centers[1][0] - 0.01, layer_centers[2][1] + 0.01,
-               label="features")
-    # L3 -> L4
-    down_arrow(W / 2, layer_centers[2][0] - 0.01, layer_centers[3][1] + 0.01,
-               label="μ, σ² per output")
+    # --- Feedback loop (right margin, dashed green) ------------------------
+    fb_x = LAYER_X1 + 0.55
+    # Pass the arrow up through all 3 inter-layer gaps so it visually loops
+    # from Layer 4 (bottom) back to Layer 3 (top of the world model).
+    fb_top = layer_y[3][1] + 0.05    # leaves Layer 4 (top edge)
+    fb_bot = layer_y[2][0] - 0.05    # enters Layer 3 (bottom edge)
+    ax.add_patch(FancyArrowPatch(
+        (fb_x, fb_top), (fb_x, fb_bot),
+        arrowstyle="-|>", mutation_scale=16,
+        color="#15803d", linewidth=2.0,
+        linestyle=(0, (5, 3)), zorder=7,
+    ))
+    # Label centered in the right margin, vertical, color-matched
+    ax.text(W - RIGHT_MARGIN / 2 + 0.20, (fb_top + fb_bot) / 2,
+            "observations → refit GP + REINFORCE on ΔHV",
+            fontsize=10, color="#15803d", ha="center", va="center",
+            fontweight="bold", rotation=90)
 
-    # --- Feedback loop (right side, dashed green) ---
-    fb_x = LAYER_X1 - 0.30
-    a = FancyArrowPatch(
-        (fb_x, layer_centers[3][1] + 0.05),
-        (fb_x, layer_centers[2][0] - 0.02),
-        arrowstyle="-|>", mutation_scale=14,
-        color="#15803d", linewidth=1.6, linestyle=(0, (4, 3)), zorder=7,
-        connectionstyle="arc3,rad=0",
-    )
-    ax.add_patch(a)
-    ax.text(fb_x - 0.15, (layer_centers[3][1] + layer_centers[2][0]) / 2,
-            "observations\nrefit GP + REINFORCE",
-            fontsize=8, color="#15803d", ha="right", va="center", fontweight="bold")
-
-    # --- Honesty footer ---
-    fig.text(0.99, 0.01,
+    # --- Honesty footer ----------------------------------------------------
+    fig.text(0.99, 0.015,
              "v1 release · pretrained policy + cached ESM3 embeddings are pre-computed indices · "
-             "simulator is the load-bearing mock",
-             ha="right", fontsize=7, color="#666", style="italic")
+             "wet-lab simulator is the load-bearing mock",
+             ha="right", fontsize=7.5, color="#666", style="italic")
 
     plt.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
