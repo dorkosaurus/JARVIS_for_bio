@@ -49,13 +49,13 @@ A world model can change all of that.
 
 This is the architecture I built.
 
-Layer one is generative — it produces about 80 capsid variants by making substitutions at the variable regions that drive tropism and antibody recognition, and by inserting peptide sequences at the site used by AAV.7m8, the best intravitreal capsid in the literature.
+Layer one is generative — it produces about 80 capsid variants by making substitutions at the variable regions that drive both tropism and and antibody recognition.   And, by inserting peptide sequences at the site used by AAV.7m8, the best intravitreal capsid in the literature, we ensure that the virus can infiltrate retinal pigment epithelial cells.  
 
-Layer two is feature engineering — ESM3, EvolutionaryScale's protein language model, embeds each variant sequence into a 2560-dimensional vector that captures something about its structure and likely function.
+Layer two is feature engineering.   ESM3, EvolutionaryScale's protein language model, embeds each variant sequence into a 2560-dimensional vector that captures something about its structure and likely function.
 
-Layer three is the world model itself — a multi-output Gaussian process that learns, from every experiment, how capsid sequence relates to three outputs: transduction efficiency, antibody escape, and inflammatory response. Critically, it gives uncertainty estimates — not just predictions, but confidence.
+Layer three is the world model itself — a multi-output Gaussian process that learns, from every experiment, how capsid sequence relates to three outputs: transduction efficiency, antibody escape, and inflammatory response. Critically, it gives uncertainty estimates.  So it gives you both predictions and confidence.
 
-And layer four is the closed loop — an RL policy that uses those predictions and uncertainties to pick the next candidates more intelligently than random. After each cycle, the observations feed back in, the GP refits, and the policy updates. That feedback arrow is the whole point.
+And layer four is the closed loop — an RL policy that uses those predictions and uncertainties to pick the next candidates more intelligently than random.   These predictions are run through a wetlab simulator grounded in the literature that generates data.  After each experiment, the observations feed back in, the Gaussian Process refits, and the policy updates. That feedback arrow is the whole point.
 
 ---
 
@@ -65,9 +65,17 @@ And layer four is the closed loop — an RL policy that uses those predictions a
 
 This is what it produced.
 
-X-axis is RPE transduction efficiency — how well the capsid gets into the target cells. Y-axis is neutralizing antibody escape — what fraction of patient antibodies this capsid evades. The red shaded zone is the inflammation constraint — candidates that land there don't get selected.
+The X-axis is RPE transduction efficiency — how well the capsid gets into the target cells. 
 
-The red diamond is AAV2 wildtype — the baseline. Low transduction, low escape. The green diamond is AAV.7m8 — the state of the art from directed evolution. The blue dashed line is the Pareto frontier the system found — the non-dominated candidates where you can't improve one objective without sacrificing the other.
+The Y-axis is neutralizing antibody escape — what fraction of patient antibodies this capsid evades. 
+
+The red shaded zone is the inflammation constraint — candidates that land there don't get selected.
+
+The red diamond is AAV2 wildtype — the baseline.  This has both low transduction, low escape. 
+
+The green diamond is AAV.7m8 — the state of the art from directed evolution. 
+
+The blue dashed line is the Pareto frontier the system found — these are the candidates that thread the needle between desired transduction efficiency, antibody escape percentage, and avoidance of an inflammatory response.  
 
 The RL policy finds that frontier faster than random selection. By cycle four or five the gap is visible, and it keeps widening.
 
@@ -77,7 +85,7 @@ The RL policy finds that frontier faster than random selection. By cycle four or
 ### RL policy beats random
 **[CUT TO: RL-vs-random hypervolume plot · 2:25–2:40]**
 
-And here's why the closed loop matters. This is Pareto hypervolume over cycles — a single number for how much of the optimal tradeoff space the system has covered. The orange line is the RL policy. The gray is random selection, same budget. Each cycle, observations feed back, the model refits, the policy updates — and the gap opens early and keeps widening.
+And here's why the closed loop matters. This is Pareto hypervolume over cycles — a single number for how much of the optimal tradeoff space the system has covered. The orange line is the RL policy. The gray is random selection, same budget. Each cycle, observations feed back, the model refits, the policy updates — and the gap between chance and solid predictions opens early and keeps widening.
 
 ---
 
@@ -85,9 +93,12 @@ And here's why the closed loop matters. This is Pareto hypervolume over cycles �
 ### Same architecture. One leg further.
 **[TALKING HEAD · 2:40–3:00]**
 
-The wet-lab simulator is the only synthetic component in this pipeline — it's calibrated to published intravitreal AAV literature, but it's not a wet lab. Everything else is real. And when real wet-lab results are available, you swap them in. The policy interface doesn't change.
 
-Last sprint, AI explored hypothesis space. This sprint, AI explored therapeutic design space. Same architecture. One leg further.
+So to summarize, in the previous sprint, I showed how we could leverage AI to scale exploration of hypothesis space. 
+
+In this sprint, I showed how we can leverage AI to scale our ability to therapeutic design space. 
+
+This uses the same inference-oriented architecture. But it's one step further towards creating JARVIS for biology.
 
 Full write-up, figures, and code are in the repo — link in the comments.
 
