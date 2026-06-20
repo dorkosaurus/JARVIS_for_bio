@@ -157,14 +157,14 @@ Layer 2 — Feature engineering
         ESM3 Forge API (esmc-6b-2024-12)
         Input: capsid variant VP1 protein sequences (FASTA)
         Output: HDF5 directory, one file per sequence
-        Embedding: mean-pooled across residues -> 1536-dim vector
+        Embedding: mean-pooled across residues -> 2560-dim vector
         Also compute pseudo-likelihood score per variant
         Cache wildtype AAV2 and AAV.7m8 reference embeddings separately
 
 Layer 3 — World model
   └── world_model.py
         Multi-output Gaussian process (GPyTorch + BoTorch)
-        Input: ESM3 embedding (1536-dim)
+        Input: ESM3 embedding (2560-dim)
           + 4 engineered features (peptide insertion present, insertion
             length, edit distance to AAV2, edit distance to AAV.7m8)
         Multi-output: predict
@@ -178,7 +178,7 @@ Layer 3 — World model
 Layer 4 — RL policy (closed loop)
   ├── policy.py
   │     Small MLP (~10k params). Inputs per candidate:
-  │       - Candidate features: ESM3 embedding (1536) + 4 engineered features
+  │       - Candidate features: ESM3 embedding (2560) + 4 engineered features
   │       - World-model output: (mean, var) for transduction, escape, inflammation
   │     Output: scalar selection_score
   │     Selection: top-k by score, filtered by predicted
@@ -222,7 +222,7 @@ data/
 │   └── capsid_variants.fasta            # generated variants (~80)
 ├── embeddings/
 │   └── esm3/
-│       ├── {sequence_hash}.h5           # shape: (1536,) mean-pooled embedding
+│       ├── {sequence_hash}.h5           # shape: (2560,) mean-pooled embedding
 │       └── index.parquet                # sequence_id -> file path + pseudo-LL score
 ├── features/
 │   └── capsid_features.parquet          # engineered features per variant
@@ -249,7 +249,7 @@ forge_client = ESM3ForgeInferenceClient(
 )
 
 def embed_sequence(sequence: str) -> np.ndarray:
-    """Embed AAV2 VP1 capsid variant. Returns 1536-dim mean-pooled vector."""
+    """Embed AAV2 VP1 capsid variant. Returns 2560-dim mean-pooled vector."""
     protein = ESMProtein(sequence=sequence)
     protein_tensor = forge_client.encode(protein)
     logits_output = forge_client.logits(
@@ -308,20 +308,20 @@ class AMDCapsidWorldModel:
       2. neut_escape            (0-1, fraction of serum panel escaped) [Pareto axis]
       3. inflammation_score     (0-1, relative innate immune activation) [CONSTRAINT]
 
-    Input features: ESM3 embedding (1536-dim) + 4 engineered features:
+    Input features: ESM3 embedding (2560-dim) + 4 engineered features:
       - has_7mer_insertion      (binary)
       - insertion_length        (int, 0 if none)
       - hamming_to_aav2         (int, normalized)
       - cosine_to_aav7m8_embed  (float, ESM3-space)
 
-    Total input dim: 1540
+    Total input dim: 2564
     """
 
     def __init__(self):
         self.model = None
         self.train_X = None
         self.train_Y = None
-        self.feature_dim = 1540
+        self.feature_dim = 2564
 
     def fit(self, X: torch.Tensor, Y: torch.Tensor):
         """Fit MultiTaskGP on accumulated experimental data."""
@@ -478,7 +478,7 @@ that wires them together. The policy is small. The loop is short. The
 ### Policy network
 
 Small MLP (~10k params). Inputs per candidate:
-- Candidate features: ESM3 embedding (1536) + 4 engineered features
+- Candidate features: ESM3 embedding (2560) + 4 engineered features
 - World-model output: `(mean_t, var_t, mean_n, var_n, mean_i, var_i)` for
   rpe_transduction / neut_escape / inflammation_score
 
@@ -755,7 +755,7 @@ matplotlib script over it.
 [Layer 2] Computing ESM3 embeddings...
   Forge API: esmc-6b-2024-12
   82 sequences embedded (80 variants + AAV2 + AAV.7m8 anchors)
-  Cache: data/embeddings/esm3/  (HDF5, 1536-dim mean-pooled)
+  Cache: data/embeddings/esm3/  (HDF5, 2560-dim mean-pooled)
 
 [Layer 3] Pre-training world model on public data (n=45)...
   MultiTaskGP fitted:

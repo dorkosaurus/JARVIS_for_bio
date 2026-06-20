@@ -6,3 +6,4 @@ prototype/indices/*.sqlite
 .env
 .DS_Store
 claude
+.claude/

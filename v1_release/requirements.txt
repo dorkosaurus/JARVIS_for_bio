@@ -1,0 +1,28 @@
+# Core
+numpy>=1.24
+pandas>=2.0
+scipy>=1.11
+torch>=2.0
+h5py>=3.9
+pyarrow>=13.0
+sqlalchemy>=2.0
+
+# ESM3
+esm>=3.0
+
+# ML
+gpytorch>=1.11
+botorch>=0.9
+
+# Bio
+biopython>=1.81
+requests>=2.31
+
+# Viz
+matplotlib>=3.7
+seaborn>=0.13
+
+# Utilities
+python-dotenv>=1.0
+tqdm>=4.66
+loguru>=0.7
